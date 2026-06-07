@@ -12,10 +12,12 @@ import (
 	"github.com/joho/godotenv"
 
 	"github.com/andrewdeanphillips/karaoke-match/backend/internal/database"
+	"github.com/andrewdeanphillips/karaoke-match/backend/internal/spotify"
 )
 
 type api struct {
-	db *pgxpool.Pool
+	db      *pgxpool.Pool
+	spotify *spotify.Client
 }
 
 func withCORS(allowedOrigin string, next http.Handler) http.Handler {
@@ -70,6 +72,14 @@ func main() {
 		frontendOrigin = "http://localhost:5173"
 	}
 
+	spotifyClientID := os.Getenv("SPOTIFY_CLIENT_ID")
+	spotifyClientSecret := os.Getenv("SPOTIFY_CLIENT_SECRET")
+	spotifyRedirectURI := os.Getenv("SPOTIFY_REDIRECT_URI")
+	if spotifyClientID == "" || spotifyClientSecret == "" || spotifyRedirectURI == "" {
+		log.Fatal("SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET, and SPOTIFY_REDIRECT_URI environment variables are required")
+	}
+	spotifyClient := spotify.NewClient(spotifyClientID, spotifyClientSecret, spotifyRedirectURI)
+
 	ctx := context.Background()
 	pool, err := database.NewPool(ctx, dbURL)
 	if err != nil {
@@ -77,10 +87,12 @@ func main() {
 	}
 	defer pool.Close()
 
-	a := &api{db: pool}
+	a := &api{db: pool, spotify: spotifyClient}
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/health", a.healthHandler)
+	mux.HandleFunc("/auth/login", a.spotifyLoginHandler)
+	mux.HandleFunc("/callback", a.spotifyCallbackHandler)
 
 	handler := withCORS(frontendOrigin, mux)
 
