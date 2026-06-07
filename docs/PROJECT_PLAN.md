@@ -35,6 +35,7 @@ KaraokeMatch aims to automate this process.
 
 * Learn and demonstrate Go development
 * Practice backend API design
+* Practice automated testing in Go (table-driven tests, idiomatic use of `testing`)
 * Build production-style systems
 * Learn GCP deployment
 * Incrementally introduce microservices, gRPC, and event-driven architecture

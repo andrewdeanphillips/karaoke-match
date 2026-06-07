@@ -157,6 +157,45 @@ Responsible for:
 
 ---
 
+# Testing Approach
+
+KaraokeMatch uses Go's built-in `testing` package — no external test
+frameworks or assertion libraries are needed at this scale.
+
+## What gets tested
+
+Tests focus on **domain logic with real value to verify**:
+
+* Artist/song extraction from playlist data
+* DAM API response parsing
+* Matching logic (availability lookups, result aggregation)
+* Cache read/write behavior
+
+Trivial code — simple struct wiring, thin handlers that just delegate to a
+service, configuration loading — is left untested. The goal is meaningful
+coverage of logic that can actually break, not 100% coverage for its own sake.
+
+## Conventions
+
+* Test files live alongside the code they test, named `xxx_test.go` (Go
+  convention — `go test ./...` discovers them automatically)
+* Prefer **table-driven tests** for functions with multiple input/output
+  cases — Go's idiomatic alternative to parameterized tests
+* Use Go interfaces to substitute fakes for external dependencies (e.g., a
+  fake DAM client when testing matching logic), avoiding the need for a
+  mocking framework
+* `net/http/httptest` is used to test HTTP handlers without running a server
+
+## Why this approach
+
+Tests are written **alongside the logic they verify**, not as a separate
+phase or a strict test-first (TDD) discipline. This keeps the focus on
+learning Go's idioms first, while still building the habit of testing the
+logic that matters — demonstrating a practical, production-style approach
+to testing without overengineering process for an MVP.
+
+---
+
 # Future Evolution
 
 ### Phase 1 (MVP)
