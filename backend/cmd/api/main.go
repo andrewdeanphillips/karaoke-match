@@ -12,6 +12,7 @@ import (
 	"github.com/joho/godotenv"
 
 	"github.com/andrewdeanphillips/karaoke-match/backend/internal/database"
+	"github.com/andrewdeanphillips/karaoke-match/backend/internal/playlist"
 	"github.com/andrewdeanphillips/karaoke-match/backend/internal/spotify"
 )
 
@@ -88,11 +89,13 @@ func main() {
 	defer pool.Close()
 
 	a := &api{db: pool, spotify: spotifyClient}
+	playlistHandler := playlist.NewHandler(playlist.NewService(spotifyClient))
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/health", a.healthHandler)
 	mux.HandleFunc("/auth/login", a.spotifyLoginHandler)
 	mux.HandleFunc("/callback", a.spotifyCallbackHandler)
+	mux.HandleFunc("/playlist/import", playlistHandler.Import)
 
 	handler := withCORS(frontendOrigin, mux)
 
