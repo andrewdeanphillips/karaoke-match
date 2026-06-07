@@ -18,6 +18,21 @@ type api struct {
 	db *pgxpool.Pool
 }
 
+func withCORS(allowedOrigin string, next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Access-Control-Allow-Origin", allowedOrigin)
+		w.Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+
+		if r.Method == http.MethodOptions {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+
+		next.ServeHTTP(w, r)
+	})
+}
+
 func (a *api) healthHandler(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
 	defer cancel()
@@ -50,6 +65,11 @@ func main() {
 		log.Fatal("DATABASE_URL environment variable is required")
 	}
 
+	frontendOrigin := os.Getenv("FRONTEND_ORIGIN")
+	if frontendOrigin == "" {
+		frontendOrigin = "http://localhost:5173"
+	}
+
 	ctx := context.Background()
 	pool, err := database.NewPool(ctx, dbURL)
 	if err != nil {
@@ -62,9 +82,11 @@ func main() {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/health", a.healthHandler)
 
+	handler := withCORS(frontendOrigin, mux)
+
 	addr := ":" + port
 	log.Printf("Starting server on %s", addr)
-	if err := http.ListenAndServe(addr, mux); err != nil {
+	if err := http.ListenAndServe(addr, handler); err != nil {
 		log.Fatal(err)
 	}
 }
