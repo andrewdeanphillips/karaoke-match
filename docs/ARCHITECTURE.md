@@ -24,7 +24,9 @@ The most likely future changes are:
 
 * DAM → DAM + JOYSOUND
 * Artist matching → Song matching
-* Public playlists → Spotify OAuth
+* Public playlist access → Private playlist access + saved imports (extending
+  the OAuth mechanism already required for reading public playlists with
+  broader scopes and user accounts)
 * Synchronous processing → Background jobs
 * Monolith → Microservices
 

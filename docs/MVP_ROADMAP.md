@@ -40,6 +40,9 @@ Import a public Spotify playlist and extract artist information.
 ## Tasks
 
 * Accept Spotify playlist URL
+* Authenticate with Spotify via the Authorization Code flow (a backend-only
+  technical requirement of Spotify's API for reading playlist data — not a
+  user-facing login feature; see PROJECT_PLAN.md and ARCHITECTURE.md)
 * Retrieve playlist metadata
 * Extract songs
 * Extract unique artists

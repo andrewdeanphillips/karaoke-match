@@ -74,7 +74,15 @@ No login required.
 
 No user accounts required.
 
-No Spotify OAuth required.
+No user-facing Spotify login or account features — users never see a
+"Login with Spotify" prompt or grant access to their own data.
+
+**Implementation note:** in late 2024 Spotify changed its platform so that
+even public playlist data now requires the backend to complete an OAuth
+Authorization Code exchange. This is a one-time backend technical step,
+invisible to end users, and is distinct from the user-facing "Spotify OAuth"
+feature described in Phase 3 below — see `ARCHITECTURE.md` for how it's
+implemented.
 
 ---
 
