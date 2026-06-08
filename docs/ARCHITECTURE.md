@@ -136,6 +136,8 @@ Responsible for:
 * Spotify API integration
 * Playlist retrieval
 * Metadata normalization
+* Per-visitor session and token management (login, persistence, refresh —
+  see Future Evolution, Phase 2)
 
 ## Karaoke
 
@@ -220,9 +222,24 @@ Add:
 
 * Song matching
 * JOYSOUND support
-* Spotify OAuth
+* Per-visitor Spotify sessions — Spotify's February 2026 API changes mean
+  playlist data is now only available for playlists the authenticated
+  account owns or collaborates on, so this is no longer an optional
+  enhancement but a prerequisite for the core feature to work for anyone but
+  the app's own developer. Unlike the other items in this phase, this one
+  *does* require an architectural change: a session store mapping browser
+  sessions to Spotify tokens, replacing the single shared in-memory session
+  the MVP launched with.
 
-No architectural changes required.
+```text
+Frontend
+↓ (session cookie)
+Go API
+↓
+Session Store (Postgres) ←→ Spotify (per-visitor tokens)
+↓
+DAM / JOYSOUND
+```
 
 ### Phase 3
 

@@ -14,7 +14,7 @@ tutorial.
 
 ## Project status
 
-**MVP in progress — 5 of 7 milestones complete.** See
+**MVP in progress — 5 of 8 milestones complete.** See
 [`docs/MVP_ROADMAP.md`](docs/MVP_ROADMAP.md) for the full plan.
 
 - [x] **Project setup** — Go backend, React/TypeScript frontend, PostgreSQL, CORS wiring between them
@@ -23,10 +23,12 @@ tutorial.
 - [x] **Playlist matching** — a single endpoint combining playlist import with per-artist availability checks
 - [x] **Availability cache** — a Postgres-backed cache (with TTL) sitting in front of JOYSOUND, plus a rate limiter and a request budget that bounds how many live lookups one playlist match can trigger
 - [ ] **Results dashboard** — frontend polish: loading states, error handling, summary statistics
+- [ ] **Per-visitor Spotify sessions** — replacing the single shared session with real per-visitor login, made necessary by Spotify's February 2026 API changes restricting playlist access to the authenticated account's own playlists (see `docs/MVP_ROADMAP.md`, Milestone 7)
 - [ ] **Deployment** — containerized backend on Cloud Run, deployed frontend, production database
 
-The backend and its API are functionally complete for the MVP; what remains
-is mostly front-end work to turn the working API into a usable product.
+The backend and its API are functionally complete for the original MVP
+shape; what remains is front-end polish, a rework of the Spotify auth layer
+to support per-visitor sessions, and deployment.
 
 ## How it works
 
@@ -36,10 +38,15 @@ User → React frontend → Go API ─┬─→ Spotify Web API   (playlist impo
                                  └─→ JOYSOUND          (live availability lookups)
 ```
 
-1. The user submits a public Spotify playlist URL.
-2. The backend authenticates with Spotify (Authorization Code flow — a
-   backend requirement for reading playlist data, not a user-facing login)
-   and extracts the playlist's unique artists.
+1. The user submits a Spotify playlist URL.
+2. The backend authenticates with Spotify (Authorization Code flow) and
+   extracts the playlist's unique artists. **Currently this uses a single
+   session shared across all visitors** — a leftover from when Spotify still
+   served public-playlist data to any authenticated app. Their February 2026
+   API changes restrict playlist track data to the authenticated account's
+   own playlists, so today this only works end-to-end for the developer's own
+   account; replacing this with real per-visitor login is Milestone 7 (see
+   "Project status" above).
 3. For each artist, the backend checks a Postgres-backed cache first; on a
    miss or a stale (30-day) entry, it searches JOYSOUND live, rate-limited
    and capped per request to stay considerate of JOYSOUND's servers.

@@ -52,7 +52,11 @@ JOYSOUND integration is deferred until a reliable and maintainable integration a
 
 ## User Flow
 
-User pastes a public Spotify playlist URL.
+User logs in with their own Spotify account.
+
+↓
+
+User pastes one of their own Spotify playlist URLs.
 
 ↓
 
@@ -70,27 +74,30 @@ Artists are matched against DAM availability.
 
 Results are displayed.
 
-No login required.
+No persistent user accounts required — no signup, profile, or saved history.
+A visitor's Spotify login only needs to last for the session.
 
-No user accounts required.
-
-No user-facing Spotify login or account features — users never see a
-"Login with Spotify" prompt or grant access to their own data.
-
-**Implementation note:** in late 2024 Spotify changed its platform so that
-even public playlist data now requires the backend to complete an OAuth
-Authorization Code exchange. This is a one-time backend technical step,
-invisible to end users, and is distinct from the user-facing "Spotify OAuth"
-feature described in Phase 3 below — see `ARCHITECTURE.md` for how it's
-implemented.
+**Implementation note:** Spotify's API has moved the ground under this flow
+twice. First, in late 2024, even reading public playlist data started
+requiring the backend to complete an OAuth Authorization Code exchange — at
+the time, a one-time backend technical step that stayed invisible to end
+users (a single shared session was enough, because Spotify still returned
+track data for any playlist to any authenticated app). Then, in their
+February 2026 Web API changes, Spotify restricted playlist track data to
+playlists the *authenticated account* owns or collaborates on — public or
+not. That makes "their own playlists" a literal, per-visitor requirement:
+each user must now log in with their own Spotify account for the feature to
+work at all. What was an invisible backend step has become the user-facing
+"Login with Spotify" feature described in Phase 3 below — see
+`ARCHITECTURE.md` for the per-visitor session architecture this requires.
 
 ---
 
 # MVP Features
 
-## Public Spotify Playlist Import
+## Spotify Playlist Import
 
-Users can paste:
+Users log in with their own Spotify account, then paste:
 
 https://open.spotify.com/playlist/...
 
@@ -102,7 +109,10 @@ The application extracts:
 
 Requirements:
 
-* Public playlists only
+* The user must be logged in with their own Spotify account
+* The playlist must be one the user owns or collaborates on — per Spotify's
+  February 2026 Web API restrictions, track data is no longer available for
+  other playlists, public or not
 
 ---
 
@@ -348,17 +358,19 @@ Benefits:
 
 ---
 
-## Phase 3: Spotify OAuth
+## Phase 3: Persistent Accounts
 
-Allow users to:
+Per-visitor "Login with Spotify" and access to one's own playlists are now
+part of the MVP itself (Milestone 7 in `MVP_ROADMAP.md`) — Spotify's
+February 2026 API changes made that a prerequisite for the core feature
+rather than a future nice-to-have. What remains a deferred enhancement is
+*persisting* that beyond a single session:
 
-* Login with Spotify
-* View private playlists
 * Save previous imports
+* Search history across visits
 
 Additional tables:
 
-* users
 * saved_playlists
 * search_history
 
