@@ -2,10 +2,12 @@
 
 KaraokeMatch tells you which artists from a Spotify playlist are actually
 available on [JOYSOUND](https://www.joysound.com/), a major Japanese karaoke
-platform. Paste a public playlist URL and get back a per-artist breakdown of
-what JOYSOUND carries — built to solve a real annoyance: manually
-cross-checking niche-genre playlists (metalcore, post-hardcore, prog metal)
-against karaoke catalogs one search at a time.
+platform. Log in with Spotify, point it at one of your playlists, and get
+back a per-artist breakdown of what JOYSOUND carries — built to solve a real
+annoyance: manually cross-checking niche-genre playlists (metalcore,
+post-hardcore, prog metal) against karaoke catalogs one search at a time.
+No Spotify account? A "try an example" path on the landing page runs the
+same flow against a few curated playlists with one click.
 
 This is also a learning project — a hands-on way to build production-style
 backend systems in Go, going deep on API design, database schema design,
@@ -14,7 +16,7 @@ tutorial.
 
 ## Project status
 
-**MVP in progress — 5 of 8 milestones complete.** See
+**MVP in progress — 7 of 8 milestones complete.** See
 [`docs/MVP_ROADMAP.md`](docs/MVP_ROADMAP.md) for the full plan.
 
 - [x] **Project setup** — Go backend, React/TypeScript frontend, PostgreSQL, CORS wiring between them
@@ -22,13 +24,12 @@ tutorial.
 - [x] **JOYSOUND integration** — search-results scraping and artist matching, including handling same-name collisions across catalogs
 - [x] **Playlist matching** — a single endpoint combining playlist import with per-artist availability checks
 - [x] **Availability cache** — a Postgres-backed cache (with TTL) sitting in front of JOYSOUND, plus a rate limiter and a request budget that bounds how many live lookups one playlist match can trigger
-- [ ] **Results dashboard** — frontend polish: loading states, error handling, summary statistics
-- [ ] **Per-visitor Spotify sessions** — replacing the single shared session with real per-visitor login, made necessary by Spotify's February 2026 API changes restricting playlist access to the authenticated account's own playlists (see `docs/MVP_ROADMAP.md`, Milestone 7)
+- [x] **Results dashboard** — loading states, error handling, summary statistics, and a results table
+- [x] **Per-visitor Spotify sessions** — real per-visitor login (each visitor reads their own playlists through their own session, persisted and refreshed in Postgres), made necessary by Spotify's February 2026 API changes restricting playlist access to the authenticated account's own playlists; plus a no-login "try an example" path behind one curated, owner-held session, for visitors without a Spotify account (see `docs/MVP_ROADMAP.md`, Milestone 7)
 - [ ] **Deployment** — containerized backend on Cloud Run, deployed frontend, production database
 
-The backend and its API are functionally complete for the original MVP
-shape; what remains is front-end polish, a rework of the Spotify auth layer
-to support per-visitor sessions, and deployment.
+The application is functionally complete end-to-end — what remains is
+deployment.
 
 ## How it works
 
@@ -38,15 +39,17 @@ User → React frontend → Go API ─┬─→ Spotify Web API   (playlist impo
                                  └─→ JOYSOUND          (live availability lookups)
 ```
 
-1. The user submits a Spotify playlist URL.
-2. The backend authenticates with Spotify (Authorization Code flow) and
-   extracts the playlist's unique artists. **Currently this uses a single
-   session shared across all visitors** — a leftover from when Spotify still
-   served public-playlist data to any authenticated app. Their February 2026
-   API changes restrict playlist track data to the authenticated account's
-   own playlists, so today this only works end-to-end for the developer's own
-   account; replacing this with real per-visitor login is Milestone 7 (see
-   "Project status" above).
+1. The visitor logs in with Spotify (OAuth Authorization Code flow). The
+   backend persists their session — access token, refresh token, expiry — as
+   a row in Postgres, and hands their browser an opaque session ID as a
+   cookie. Every later request resolves that cookie back to a fresh,
+   automatically-refreshed access token, so each visitor's playlists are
+   read through their own account, not a shared one. (A visitor without a
+   Spotify account can skip all of this via "try an example," which runs the
+   same flow against a curated playlist using one dedicated, owner-held
+   session instead.)
+2. The visitor submits one of their own playlist URLs, and the backend
+   extracts its unique artists using their access token.
 3. For each artist, the backend checks a Postgres-backed cache first; on a
    miss or a stale (30-day) entry, it searches JOYSOUND live, rate-limited
    and capped per request to stay considerate of JOYSOUND's servers.
@@ -85,6 +88,11 @@ migrate -path migrations -database "$DATABASE_URL?sslmode=disable" up
 # Backend (copy .env.example to .env and fill in Spotify credentials first)
 go run ./cmd/api
 
-# Frontend
+# Frontend (copy .env.example to .env first)
 cd frontend && npm install && npm run dev
 ```
+
+Both `.env.example` files call out a constraint worth knowing up front: the
+frontend origin, backend origin, and Spotify's registered `redirect_uri` all
+need to agree on host (`127.0.0.1` vs. `localhost` count as different "sites"
+for cookie purposes, and the session cookie won't survive a mismatch).
