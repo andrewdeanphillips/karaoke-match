@@ -24,6 +24,7 @@ type api struct {
 	playlist         *playlist.Service
 	frontendOrigin   string
 	exampleSessionID string
+	exampleLimiter   *exampleRateLimiter
 }
 
 func withCORS(allowedOrigin string, next http.Handler) http.Handler {
@@ -111,6 +112,7 @@ func main() {
 		playlist:         playlistService,
 		frontendOrigin:   frontendOrigin,
 		exampleSessionID: exampleSessionID,
+		exampleLimiter:   newExampleRateLimiter(exampleIPCooldown, exampleHourlyCap),
 	}
 	playlistHandler := playlist.NewHandler(playlistService)
 
