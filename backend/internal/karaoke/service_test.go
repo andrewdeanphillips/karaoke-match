@@ -35,15 +35,30 @@ func (noopLimiter) wait() {}
 // fakeCache substitutes for postgresCache in tests, letting us exercise
 // Service's cache hit/miss/staleness decisions without a real database.
 // Service always looks artists up under catalogName, so the fake keys its
-// records by artist alone.
+// records by artist alone. lookupBatchCalls counts lookupBatch invocations —
+// CheckAvailability is expected to make exactly one per call, batching every
+// artist into a single round trip rather than looking each one up alone.
 type fakeCache struct {
-	entries map[string]cacheEntry
-	stored  map[string]cacheEntry
+	entries          map[string]cacheEntry
+	stored           map[string]cacheEntry
+	lookupBatchCalls int
 }
 
 func (f *fakeCache) lookup(_ context.Context, _, artist string) (cacheEntry, bool, error) {
 	entry, found := f.entries[artist]
 	return entry, found, nil
+}
+
+func (f *fakeCache) lookupBatch(_ context.Context, _ string, artists []string) (map[string]cacheEntry, error) {
+	f.lookupBatchCalls++
+
+	found := make(map[string]cacheEntry)
+	for _, artist := range artists {
+		if entry, ok := f.entries[artist]; ok {
+			found[artist] = entry
+		}
+	}
+	return found, nil
 }
 
 func (f *fakeCache) store(_ context.Context, _, artist string, entry cacheEntry) error {
@@ -209,6 +224,38 @@ func TestCheckAvailability(t *testing.T) {
 			{Artist: "Bring Me The Horizon", Available: true},
 			{Artist: "Thornhill", Available: false},
 			{Artist: "Architects", Available: true},
+		}
+		if !slices.Equal(got, want) {
+			t.Errorf("got %v, want %v", got, want)
+		}
+	})
+
+	t.Run("batches every artist's cache lookup into a single round trip", func(t *testing.T) {
+		cache := &fakeCache{entries: map[string]cacheEntry{
+			"Architects":           {Available: true, LastChecked: time.Now()},
+			"Bring Me The Horizon": {Available: false, LastChecked: time.Now().Add(-(cacheTTL + time.Hour))},
+		}}
+		svc := &Service{
+			joysound: fakeCatalog{artists: map[string][]Artist{
+				"Bring Me The Horizon": {{ID: "62831", Name: "Bring Me The Horizon"}},
+			}},
+			cache:   cache,
+			limiter: noopLimiter{},
+		}
+
+		got, err := svc.CheckAvailability(context.Background(), []string{"Architects", "Bring Me The Horizon", "Thornhill"})
+		if err != nil {
+			t.Fatalf("CheckAvailability returned error: %v", err)
+		}
+
+		if cache.lookupBatchCalls != 1 {
+			t.Errorf("got %d lookupBatch calls, want exactly 1 — every artist's cache check should be one round trip, not one per artist", cache.lookupBatchCalls)
+		}
+
+		want := []AvailabilityResult{
+			{Artist: "Architects", Available: true},           // fresh cache hit
+			{Artist: "Bring Me The Horizon", Available: true}, // stale entry, refreshed live
+			{Artist: "Thornhill", Available: false},           // cache miss, searched live
 		}
 		if !slices.Equal(got, want) {
 			t.Errorf("got %v, want %v", got, want)

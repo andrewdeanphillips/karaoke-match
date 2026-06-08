@@ -24,6 +24,7 @@ type cacheEntry struct {
 // logic without making real database queries.
 type cache interface {
 	lookup(ctx context.Context, catalog, artist string) (cacheEntry, bool, error)
+	lookupBatch(ctx context.Context, catalog string, artists []string) (map[string]cacheEntry, error)
 	store(ctx context.Context, catalog, artist string, entry cacheEntry) error
 }
 
@@ -57,6 +58,45 @@ func (c *postgresCache) lookup(ctx context.Context, catalog, artist string) (cac
 		entry.CatalogArtistID = *catalogArtistID
 	}
 	return entry, true, nil
+}
+
+// lookupBatch returns cached availability records for whichever of the given
+// artists have one, in a single round trip — the multi-artist counterpart to
+// lookup, for callers (like CheckAvailability) that need to check many
+// artists at once rather than paying one round trip per artist. Artists with
+// no cached record simply have no entry in the returned map; this mirrors
+// lookup's (cacheEntry{}, false, nil) "not found" signal, just batched.
+func (c *postgresCache) lookupBatch(ctx context.Context, catalog string, artists []string) (map[string]cacheEntry, error) {
+	rows, err := c.pool.Query(ctx,
+		`SELECT artist, available, catalog_artist_id, last_checked
+		 FROM artist_availability
+		 WHERE catalog = $1 AND artist = ANY($2)`,
+		catalog, artists,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("looking up cached availability for %d artists on %q: %w", len(artists), catalog, err)
+	}
+	defer rows.Close()
+
+	entries := make(map[string]cacheEntry)
+	for rows.Next() {
+		var artist string
+		var entry cacheEntry
+		var catalogArtistID *string
+
+		if err := rows.Scan(&artist, &entry.Available, &catalogArtistID, &entry.LastChecked); err != nil {
+			return nil, fmt.Errorf("scanning cached availability row for %q: %w", catalog, err)
+		}
+		if catalogArtistID != nil {
+			entry.CatalogArtistID = *catalogArtistID
+		}
+		entries[artist] = entry
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("reading cached availability rows for %q: %w", catalog, err)
+	}
+
+	return entries, nil
 }
 
 // store overwrites any existing record for the given artist and catalog, so

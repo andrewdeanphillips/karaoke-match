@@ -134,13 +134,23 @@ func (s *Service) searchLive(ctx context.Context, artist string) (bool, error) {
 // cached result are free — only artists that actually require a live search
 // count against that limit, so a well-cached playlist can yield more results
 // than a cold one would, for the same JOYSOUND cost.
+//
+// Cache lookups for every artist are batched into one round trip up front
+// (rather than one round trip per artist) — the playlists this checks can
+// have dozens of unique artists, and against a remote database each round
+// trip costs real network latency.
 func (s *Service) CheckAvailability(ctx context.Context, artists []string) ([]AvailabilityResult, error) {
+	cached, err := s.cache.lookupBatch(ctx, catalogName, artists)
+	if err != nil {
+		log.Printf("batch-checking cache for %d artists: %v", len(artists), err)
+		cached = nil
+	}
+
 	results := make([]AvailabilityResult, 0, len(artists))
 	liveSearches := 0
 
 	for _, artist := range artists {
-		entry, ok := s.freshCacheHit(ctx, artist)
-		if ok {
+		if entry, ok := cached[artist]; ok && time.Since(entry.LastChecked) < cacheTTL {
 			results = append(results, AvailabilityResult{Artist: artist, Available: entry.Available})
 			continue
 		}
