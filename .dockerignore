@@ -1,0 +1,16 @@
+# Never send secrets into the build context
+**/.env
+
+# Build artifacts produced fresh inside the image
+frontend/dist
+backend/cmd/api/web/dist
+
+# Dependencies — reinstalled inside the image for a clean, reproducible build
+**/node_modules
+
+# Not needed in the image
+.git
+docs/
+.claude/
+README.md
+backend/docker-compose.yml

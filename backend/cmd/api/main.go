@@ -125,6 +125,7 @@ func main() {
 	mux.HandleFunc("/playlist/match", a.requireSpotifySession(a.matchHandler))
 	mux.HandleFunc("/examples", a.examplesListHandler)
 	mux.HandleFunc("/examples/match", a.exampleMatchHandler)
+	mux.Handle("/", frontendHandler())
 
 	handler := withCORS(frontendOrigin, mux)
 
