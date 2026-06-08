@@ -1,11 +1,8 @@
 <!doctype html>
 <!--
-  Placeholder, replaced wholesale by the production frontend build before the
-  container image is compiled (cd frontend && npm run build, copy dist/* over
-  this directory) — see docs/private/MILESTONE_8_DEPLOYMENT_PLAN.md. It exists
-  only so the //go:embed directive in web.go has a file to embed for local
-  `go build` / `go run` / `go test`, none of which serve the frontend from
-  here (the Vite dev server does that locally, on :5173).
+  Placeholder — the real frontend build is copied over this file before the
+  container image is compiled. It exists only so the //go:embed directive in
+  web.go has something to embed for local go build / go run / go test.
 -->
 <title>karaoke-match</title>
 <p>Frontend isn't embedded in this build — run <code>npm run dev</code> in
