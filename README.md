@@ -1,13 +1,14 @@
 # KaraokeMatch
 
+**[Try it live →](https://karaoke-match-723385085873.asia-northeast1.run.app/)**
+(no Spotify account needed — the landing page has a one-click example path)
+
 KaraokeMatch tells you which artists from a Spotify playlist are actually
 available on [JOYSOUND](https://www.joysound.com/), a major Japanese karaoke
 platform. Log in with Spotify, point it at one of your playlists, and get
 back a per-artist breakdown of what JOYSOUND carries — built to solve a real
 annoyance: manually cross-checking niche-genre playlists (metalcore,
 post-hardcore, prog metal) against karaoke catalogs one search at a time.
-No Spotify account? A "try an example" path on the landing page runs the
-same flow against a few curated playlists with one click.
 
 This is also a learning project — a hands-on way to build production-style
 backend systems in Go, going deep on API design, database schema design,
@@ -16,20 +17,17 @@ tutorial.
 
 ## Project status
 
-**MVP in progress — 7 of 8 milestones complete.** See
+**MVP complete — all 8 milestones shipped and live in production.** See
 [`docs/MVP_ROADMAP.md`](docs/MVP_ROADMAP.md) for the full plan.
 
 - [x] **Project setup** — Go backend, React/TypeScript frontend, PostgreSQL, CORS wiring between them
 - [x] **Spotify playlist import** — OAuth Authorization Code flow, playlist parsing, unique-artist extraction
 - [x] **JOYSOUND integration** — search-results scraping and artist matching, including handling same-name collisions across catalogs
 - [x] **Playlist matching** — a single endpoint combining playlist import with per-artist availability checks
-- [x] **Availability cache** — a Postgres-backed cache (with TTL) sitting in front of JOYSOUND, plus a rate limiter and a request budget that bounds how many live lookups one playlist match can trigger
+- [x] **Availability cache** — a Postgres-backed cache (with TTL) sitting in front of JOYSOUND, plus a rate limiter and a per-request budget that bounds how many live lookups one playlist check can trigger
 - [x] **Results dashboard** — loading states, error handling, summary statistics, and a results table
-- [x] **Per-visitor Spotify sessions** — real per-visitor login (each visitor reads their own playlists through their own session, persisted and refreshed in Postgres), made necessary by Spotify's February 2026 API changes restricting playlist access to the authenticated account's own playlists; plus a no-login "try an example" path behind one curated, owner-held session, for visitors without a Spotify account (see `docs/MVP_ROADMAP.md`, Milestone 7)
-- [ ] **Deployment** — containerized backend on Cloud Run, deployed frontend, production database
-
-The application is functionally complete end-to-end — what remains is
-deployment.
+- [x] **Per-visitor Spotify sessions** — each visitor reads their own playlists through their own session (access token, refresh token, expiry) persisted and refreshed in Postgres; made necessary by Spotify restricting playlist access to the playlist owner's account; plus a no-login "try an example" path for visitors without a Spotify account, backed by one dedicated owner-held session
+- [x] **Deployment** — containerized as a single image (Go binary embedding the built frontend) and deployed to Cloud Run, backed by a managed PostgreSQL database
 
 ## How it works
 
@@ -50,9 +48,15 @@ User → React frontend → Go API ─┬─→ Spotify Web API   (playlist impo
    session instead.)
 2. The visitor submits one of their own playlist URLs, and the backend
    extracts its unique artists using their access token.
-3. For each artist, the backend checks a Postgres-backed cache first; on a
-   miss or a stale (30-day) entry, it searches JOYSOUND live, rate-limited
-   and capped per request to stay considerate of JOYSOUND's servers.
+3. For each artist, the backend checks a Postgres-backed cache first (entries
+   stay fresh for 30 days). On a miss, it searches JOYSOUND live —
+   deliberately paced to at least 200ms between requests and capped at 50
+   live lookups per playlist check. JOYSOUND has no public API; this pacing
+   treats the site like a human visitor would, which matters when you're
+   issuing one page load per artist. A mostly-cached playlist returns
+   near-instantly; a cold playlist with more than 50 uncached artists will
+   return a partial result — the UI reports exactly how many artists were
+   checked.
 4. The combined results — per-artist availability plus how many were actually
    checked — are returned to the frontend.
 
@@ -73,6 +77,7 @@ the full reasoning, including the trade-offs considered.
 | Backend | Go, `net/http`, `pgx`, PostgreSQL, `golang-migrate` |
 | Frontend | React, TypeScript, Vite |
 | External APIs | Spotify Web API (OAuth), JOYSOUND (HTML scraping) |
+| Deployment | Docker, Google Cloud Run, managed PostgreSQL, Cloud Scheduler |
 
 ## Running locally
 
