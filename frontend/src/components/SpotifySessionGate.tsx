@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import { hasSpotifySession, loginURL } from "../api/auth";
+import TryAnExample from "./TryAnExample";
 
 type SessionStatus = "checking" | "loggedIn" | "loggedOut";
 
@@ -49,6 +50,7 @@ function SpotifySessionGate({ children }: SpotifySessionGateProps) {
           you'll need to log in to get started.
         </p>
         <a href={loginURL}>Log in with Spotify</a>
+        <TryAnExample />
       </main>
     );
   }

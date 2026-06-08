@@ -18,11 +18,12 @@ import (
 )
 
 type api struct {
-	db             *pgxpool.Pool
-	spotify        *spotify.Client
-	karaoke        *karaoke.Service
-	playlist       *playlist.Service
-	frontendOrigin string
+	db               *pgxpool.Pool
+	spotify          *spotify.Client
+	karaoke          *karaoke.Service
+	playlist         *playlist.Service
+	frontendOrigin   string
+	exampleSessionID string
 }
 
 func withCORS(allowedOrigin string, next http.Handler) http.Handler {
@@ -81,6 +82,12 @@ func main() {
 		frontendOrigin = "http://localhost:5173"
 	}
 
+	// exampleSessionID names the one deliberate, owner-held Spotify session
+	// that powers the "try an example" path — left empty, that path simply
+	// doesn't appear, which is the right default for anyone running this
+	// project locally without Andrew's own session on hand.
+	exampleSessionID := os.Getenv("EXAMPLE_SESSION_ID")
+
 	spotifyClientID := os.Getenv("SPOTIFY_CLIENT_ID")
 	spotifyClientSecret := os.Getenv("SPOTIFY_CLIENT_SECRET")
 	spotifyRedirectURI := os.Getenv("SPOTIFY_REDIRECT_URI")
@@ -97,7 +104,14 @@ func main() {
 	spotifyClient := spotify.NewClient(spotifyClientID, spotifyClientSecret, spotifyRedirectURI, pool)
 
 	playlistService := playlist.NewService(spotifyClient)
-	a := &api{db: pool, spotify: spotifyClient, karaoke: karaoke.NewService(pool), playlist: playlistService, frontendOrigin: frontendOrigin}
+	a := &api{
+		db:               pool,
+		spotify:          spotifyClient,
+		karaoke:          karaoke.NewService(pool),
+		playlist:         playlistService,
+		frontendOrigin:   frontendOrigin,
+		exampleSessionID: exampleSessionID,
+	}
 	playlistHandler := playlist.NewHandler(playlistService)
 
 	mux := http.NewServeMux()
@@ -107,6 +121,8 @@ func main() {
 	mux.HandleFunc("/callback", a.spotifyCallbackHandler)
 	mux.HandleFunc("/playlist/import", a.requireSpotifySession(playlistHandler.Import))
 	mux.HandleFunc("/playlist/match", a.requireSpotifySession(a.matchHandler))
+	mux.HandleFunc("/examples", a.examplesListHandler)
+	mux.HandleFunc("/examples/match", a.exampleMatchHandler)
 
 	handler := withCORS(frontendOrigin, mux)
 
