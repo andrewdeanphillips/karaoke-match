@@ -20,6 +20,8 @@ function MatchPage() {
     } catch (err) {
       if (err instanceof MatchError && err.status === 400) {
         setError(err.message);
+      } else if (err instanceof MatchError && err.status === 401) {
+        setError("Your Spotify session has expired — refresh the page to log in again.");
       } else {
         setError("Something went wrong on our end — please try again in a moment.");
       }

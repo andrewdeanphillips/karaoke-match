@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"log"
 	"net/http"
 
@@ -44,8 +43,9 @@ func (a *api) spotifyLoginHandler(w http.ResponseWriter, r *http.Request) {
 
 // spotifyCallbackHandler completes the flow: Spotify redirects the browser
 // back here with an authorization code and the state we issued. We confirm
-// the state matches our cookie (guarding against CSRF), then exchange the
-// code for a user access token and refresh token.
+// the state matches our cookie (guarding against CSRF), exchange the code for
+// a session, set that session as a cookie, and send the visitor's browser
+// back to the frontend — logged in and ready to use the app.
 func (a *api) spotifyCallbackHandler(w http.ResponseWriter, r *http.Request) {
 	cookie, err := r.Cookie(stateCookieName)
 	if err != nil || r.URL.Query().Get("state") != cookie.Value {
@@ -81,8 +81,16 @@ func (a *api) spotifyCallbackHandler(w http.ResponseWriter, r *http.Request) {
 		SameSite: http.SameSiteLaxMode,
 	})
 
-	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-	fmt.Fprintln(w, "Spotify authorization complete — you can close this tab.")
+	http.Redirect(w, r, a.frontendOrigin, http.StatusFound)
+}
+
+// spotifySessionHandler handles GET /auth/session — a lightweight check the
+// frontend calls on load to decide whether to show the playlist form or a
+// "log in with Spotify" prompt. It does no work of its own: reaching this
+// handler at all means requireSpotifySession already confirmed the visitor
+// has a usable session, so there's nothing left to report but success.
+func (a *api) spotifySessionHandler(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // requireSpotifySession wraps a handler so it only runs for visitors with a
