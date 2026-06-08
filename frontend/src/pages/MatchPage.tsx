@@ -2,6 +2,8 @@ import { useState } from "react";
 import { matchPlaylist, MatchError } from "../api/match";
 import type { MatchResult } from "../types/match";
 import PlaylistForm from "../components/PlaylistForm";
+import SummaryStats from "../components/SummaryStats";
+import ResultsTable from "../components/ResultsTable";
 
 function MatchPage() {
   const [result, setResult] = useState<MatchResult | null>(null);
@@ -33,13 +35,10 @@ function MatchPage() {
       {loading && <p>Checking…</p>}
       {error && <p>Error: {error}</p>}
       {result && (
-        <ul>
-          {result.results.map((r) => (
-            <li key={r.artist}>
-              {r.artist}: {r.available ? "available" : "not available"}
-            </li>
-          ))}
-        </ul>
+        <>
+          <SummaryStats result={result} />
+          <ResultsTable results={result.results} />
+        </>
       )}
     </main>
   );
