@@ -86,7 +86,7 @@ func main() {
 	// exampleSessionID names the one deliberate, owner-held Spotify session
 	// that powers the "try an example" path — left empty, that path simply
 	// doesn't appear, which is the right default for anyone running this
-	// project locally without Andrew's own session on hand.
+	// project locally without the owner session configured.
 	exampleSessionID := os.Getenv("EXAMPLE_SESSION_ID")
 
 	spotifyClientID := os.Getenv("SPOTIFY_CLIENT_ID")
@@ -104,24 +104,21 @@ func main() {
 
 	spotifyClient := spotify.NewClient(spotifyClientID, spotifyClientSecret, spotifyRedirectURI, pool)
 
-	playlistService := playlist.NewService(spotifyClient)
 	a := &api{
 		db:               pool,
 		spotify:          spotifyClient,
 		karaoke:          karaoke.NewService(pool),
-		playlist:         playlistService,
+		playlist:         playlist.NewService(spotifyClient),
 		frontendOrigin:   frontendOrigin,
 		exampleSessionID: exampleSessionID,
 		exampleLimiter:   newExampleRateLimiter(exampleIPCooldown, exampleHourlyCap),
 	}
-	playlistHandler := playlist.NewHandler(playlistService)
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/health", a.healthHandler)
 	mux.HandleFunc("/auth/login", a.spotifyLoginHandler)
 	mux.HandleFunc("/auth/session", a.requireSpotifySession(a.spotifySessionHandler))
 	mux.HandleFunc("/callback", a.spotifyCallbackHandler)
-	mux.HandleFunc("/playlist/import", a.requireSpotifySession(playlistHandler.Import))
 	mux.HandleFunc("/playlist/match", a.requireSpotifySession(a.matchHandler))
 	mux.HandleFunc("/examples", a.examplesListHandler)
 	mux.HandleFunc("/examples/match", a.exampleMatchHandler)

@@ -25,8 +25,7 @@ type matchResponse struct {
 
 // matchHandler handles POST /playlist/match: it accepts a Spotify playlist
 // URL, imports the artists credited on it, checks each one's availability on
-// JOYSOUND, and responds with the combined per-artist match summary — the
-// playlist and karaoke domains meeting for the first time in production code.
+// JOYSOUND, and responds with the combined per-artist match summary.
 func (a *api) matchHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)

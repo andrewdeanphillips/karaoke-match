@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { SubmitEvent } from "react";
+import type { FormEvent } from "react";
 
 type PlaylistFormProps = {
   onSubmit: (url: string) => void;
@@ -9,7 +9,7 @@ type PlaylistFormProps = {
 function PlaylistForm({ onSubmit, disabled }: PlaylistFormProps) {
   const [url, setUrl] = useState("");
 
-  function handleSubmit(event: SubmitEvent) {
+  function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     onSubmit(url);
   }

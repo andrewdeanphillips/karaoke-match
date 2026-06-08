@@ -2,11 +2,9 @@ package karaoke
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"time"
 
-	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -23,7 +21,6 @@ type cacheEntry struct {
 // enough that tests can substitute a fake and exercise caching/staleness
 // logic without making real database queries.
 type cache interface {
-	lookup(ctx context.Context, catalog, artist string) (cacheEntry, bool, error)
 	lookupBatch(ctx context.Context, catalog string, artists []string) (map[string]cacheEntry, error)
 	store(ctx context.Context, catalog, artist string, entry cacheEntry) error
 }
@@ -34,30 +31,6 @@ type postgresCache struct {
 
 func newPostgresCache(pool *pgxpool.Pool) *postgresCache {
 	return &postgresCache{pool: pool}
-}
-
-func (c *postgresCache) lookup(ctx context.Context, catalog, artist string) (cacheEntry, bool, error) {
-	var entry cacheEntry
-	var catalogArtistID *string
-
-	err := c.pool.QueryRow(ctx,
-		`SELECT available, catalog_artist_id, last_checked
-		 FROM artist_availability
-		 WHERE artist = $1 AND catalog = $2`,
-		artist, catalog,
-	).Scan(&entry.Available, &catalogArtistID, &entry.LastChecked)
-
-	if errors.Is(err, pgx.ErrNoRows) {
-		return cacheEntry{}, false, nil
-	}
-	if err != nil {
-		return cacheEntry{}, false, fmt.Errorf("looking up cached availability for %q on %q: %w", artist, catalog, err)
-	}
-
-	if catalogArtistID != nil {
-		entry.CatalogArtistID = *catalogArtistID
-	}
-	return entry, true, nil
 }
 
 // lookupBatch returns cached availability records for whichever of the given

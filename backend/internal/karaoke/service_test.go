@@ -44,11 +44,6 @@ type fakeCache struct {
 	lookupBatchCalls int
 }
 
-func (f *fakeCache) lookup(_ context.Context, _, artist string) (cacheEntry, bool, error) {
-	entry, found := f.entries[artist]
-	return entry, found, nil
-}
-
 func (f *fakeCache) lookupBatch(_ context.Context, _ string, artists []string) (map[string]cacheEntry, error) {
 	f.lookupBatchCalls++
 
@@ -129,79 +124,6 @@ func TestFindArtistNamed(t *testing.T) {
 			}
 		})
 	}
-}
-
-func TestIsArtistAvailable(t *testing.T) {
-	t.Run("fresh cache hit is returned without searching", func(t *testing.T) {
-		cache := &fakeCache{entries: map[string]cacheEntry{
-			"Architects": {Available: true, CatalogArtistID: "1", LastChecked: time.Now()},
-		}}
-		svc := &Service{joysound: fakeCatalog{err: errors.New("search should not run on a fresh cache hit")}, cache: cache, limiter: noopLimiter{}}
-
-		got, err := svc.IsArtistAvailable(context.Background(), "Architects")
-		if err != nil {
-			t.Fatalf("IsArtistAvailable returned error: %v", err)
-		}
-		if !got {
-			t.Errorf("got %v, want true", got)
-		}
-	})
-
-	t.Run("cache miss searches live and stores the result", func(t *testing.T) {
-		cache := &fakeCache{}
-		svc := &Service{
-			joysound: fakeCatalog{artists: map[string][]Artist{
-				"Architects": {{ID: "1", Name: "Architects"}},
-			}},
-			cache:   cache,
-			limiter: noopLimiter{},
-		}
-
-		got, err := svc.IsArtistAvailable(context.Background(), "Architects")
-		if err != nil {
-			t.Fatalf("IsArtistAvailable returned error: %v", err)
-		}
-		if !got {
-			t.Errorf("got %v, want true", got)
-		}
-
-		stored, ok := cache.stored["Architects"]
-		if !ok {
-			t.Fatal("expected the live result to be cached")
-		}
-		if !stored.Available || stored.CatalogArtistID != "1" {
-			t.Errorf("got stored entry %+v, want available with catalog artist ID %q", stored, "1")
-		}
-	})
-
-	t.Run("stale cache entry is refreshed with a live search", func(t *testing.T) {
-		cache := &fakeCache{entries: map[string]cacheEntry{
-			"Architects": {Available: false, LastChecked: time.Now().Add(-(cacheTTL + time.Hour))},
-		}}
-		svc := &Service{
-			joysound: fakeCatalog{artists: map[string][]Artist{
-				"Architects": {{ID: "1", Name: "Architects"}},
-			}},
-			cache:   cache,
-			limiter: noopLimiter{},
-		}
-
-		got, err := svc.IsArtistAvailable(context.Background(), "Architects")
-		if err != nil {
-			t.Fatalf("IsArtistAvailable returned error: %v", err)
-		}
-		if !got {
-			t.Errorf("got %v, want true — a stale cache entry should be refreshed by a live search", got)
-		}
-
-		stored, ok := cache.stored["Architects"]
-		if !ok {
-			t.Fatal("expected the refreshed result to be cached")
-		}
-		if !stored.Available {
-			t.Errorf("got stored entry %+v, want it refreshed to available", stored)
-		}
-	})
 }
 
 func TestCheckAvailability(t *testing.T) {

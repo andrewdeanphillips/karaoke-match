@@ -1,22 +1,19 @@
 package spotify
 
-// userTokenResponse mirrors Spotify's token response for the Authorization
-// Code and refresh_token grants, including the granted scope and a refresh
-// token for renewal.
+// userTokenResponse mirrors the fields we use from Spotify's token response
+// for the Authorization Code and refresh_token grants.
 type userTokenResponse struct {
 	AccessToken  string `json:"access_token"`
-	TokenType    string `json:"token_type"`
-	Scope        string `json:"scope"`
 	ExpiresIn    int    `json:"expires_in"`
 	RefreshToken string `json:"refresh_token"`
 }
 
-// playlistTracksPage mirrors one page of Spotify's playlist-tracks response:
-// a slice of items plus a link to the next page (empty when there is none).
+// playlistTracksPage mirrors the fields we use from one page of Spotify's
+// playlist-tracks response: items and a link to the next page (empty when
+// there is none).
 type playlistTracksPage struct {
 	Items []playlistItem `json:"items"`
 	Next  string         `json:"next"`
-	Total int            `json:"total"`
 }
 
 type playlistItem struct {

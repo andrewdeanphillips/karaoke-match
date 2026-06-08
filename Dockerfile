@@ -1,10 +1,5 @@
 # syntax=docker/dockerfile:1
 
-# Builds the frontend's static assets, then embeds them into the Go binary —
-# one image, one Cloud Run service, one origin for the whole app (no CORS/
-# cookie cross-origin questions to get wrong in production). See
-# docs/private/MILESTONE_8_DEPLOYMENT_PLAN.md and backend/cmd/api/web.go.
-
 FROM node:24-alpine AS frontend
 WORKDIR /src/frontend
 COPY frontend/package.json frontend/package-lock.json ./

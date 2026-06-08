@@ -24,8 +24,8 @@ const exampleIPCooldown = 15 * time.Second
 const exampleHourlyCap = 100
 
 // exampleRateLimiter protects /examples/match — the one public, no-login
-// endpoint that spends Andrew's personal Spotify session on an anonymous
-// visitor's behalf. Two checks share a single lock: a per-IP cooldown guards
+// endpoint that spends the owner's Spotify session on an anonymous visitor's
+// behalf. Two checks share a single lock: a per-IP cooldown guards
 // against any one visitor hammering it, and a rolling hourly cap guards
 // against the same abuse spread across many addresses.
 type exampleRateLimiter struct {
@@ -91,9 +91,7 @@ func clientIP(r *http.Request) string {
 	return host
 }
 
-// curatedExample is one playlist hand-picked for the "try an example" path —
-// chosen by Andrew so a visitor with no Spotify account of their own (a
-// recruiter, say) can still watch KaraokeMatch run end-to-end with one click.
+// curatedExample is one playlist hand-picked for the "try an example" path.
 // ID is an opaque slug the frontend passes back to identify which one to run;
 // keeping it separate from the Spotify playlist ID means the client never
 // needs to know — or be trusted to send — a real playlist URL for this path.

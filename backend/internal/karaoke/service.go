@@ -78,30 +78,6 @@ func NewService(pool *pgxpool.Pool) *Service {
 	return &Service{joysound: newJoysoundClient(), cache: newPostgresCache(pool), limiter: &rateLimiter{}}
 }
 
-// IsArtistAvailable reports whether JOYSOUND lists the given artist. A fresh
-// cached result is returned as-is, with no request to JOYSOUND involved at
-// all; otherwise it searches live and caches what it finds for next time.
-func (s *Service) IsArtistAvailable(ctx context.Context, artist string) (bool, error) {
-	if entry, ok := s.freshCacheHit(ctx, artist); ok {
-		return entry.Available, nil
-	}
-	return s.searchLive(ctx, artist)
-}
-
-// freshCacheHit returns the cached availability record for the given artist,
-// if one exists and is still within cacheTTL. A lookup failure is logged and
-// treated as a miss — caching is a performance optimization, not a
-// correctness requirement, so a flaky cache should degrade the feature to
-// "a bit slower," never "broken."
-func (s *Service) freshCacheHit(ctx context.Context, artist string) (cacheEntry, bool) {
-	entry, found, err := s.cache.lookup(ctx, catalogName, artist)
-	if err != nil {
-		log.Printf("checking cache for artist %q: %v", artist, err)
-		return cacheEntry{}, false
-	}
-	return entry, found && time.Since(entry.LastChecked) < cacheTTL
-}
-
 // searchLive paces itself against JOYSOUND's servers, searches live for the
 // given artist, and caches what it finds for next time (best-effort — a
 // caching failure is logged rather than failing the lookup, for the same
