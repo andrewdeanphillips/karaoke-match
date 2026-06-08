@@ -18,9 +18,10 @@ import (
 )
 
 type api struct {
-	db      *pgxpool.Pool
-	spotify *spotify.Client
-	karaoke *karaoke.Service
+	db       *pgxpool.Pool
+	spotify  *spotify.Client
+	karaoke  *karaoke.Service
+	playlist *playlist.Service
 }
 
 func withCORS(allowedOrigin string, next http.Handler) http.Handler {
@@ -90,14 +91,16 @@ func main() {
 	}
 	defer pool.Close()
 
-	a := &api{db: pool, spotify: spotifyClient, karaoke: karaoke.NewService()}
-	playlistHandler := playlist.NewHandler(playlist.NewService(spotifyClient))
+	playlistService := playlist.NewService(spotifyClient)
+	a := &api{db: pool, spotify: spotifyClient, karaoke: karaoke.NewService(), playlist: playlistService}
+	playlistHandler := playlist.NewHandler(playlistService)
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/health", a.healthHandler)
 	mux.HandleFunc("/auth/login", a.spotifyLoginHandler)
 	mux.HandleFunc("/callback", a.spotifyCallbackHandler)
 	mux.HandleFunc("/playlist/import", playlistHandler.Import)
+	mux.HandleFunc("/playlist/match", a.matchHandler)
 
 	handler := withCORS(frontendOrigin, mux)
 

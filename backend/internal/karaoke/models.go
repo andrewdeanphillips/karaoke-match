@@ -10,3 +10,10 @@ type Artist struct {
 	ID   string
 	Name string
 }
+
+// AvailabilityResult pairs an artist name with whether JOYSOUND lists them —
+// the unit of output for a playlist-wide availability check.
+type AvailabilityResult struct {
+	Artist    string `json:"artist"`
+	Available bool   `json:"available"`
+}
