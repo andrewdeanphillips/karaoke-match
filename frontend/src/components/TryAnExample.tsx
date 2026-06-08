@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { fetchExamples, matchExample } from "../api/examples";
+import { fetchExamples, matchExample, ExampleError } from "../api/examples";
 import type { Example } from "../api/examples";
 import type { MatchResult } from "../types/match";
 import SummaryStats from "./SummaryStats";
@@ -37,8 +37,12 @@ function TryAnExample() {
 
     try {
       setResult(await matchExample(example.id));
-    } catch {
-      setError("Something went wrong loading that example — please try again in a moment.");
+    } catch (err) {
+      if (err instanceof ExampleError && err.status === 429) {
+        setError("You've tried a few examples in quick succession — please wait a moment and try again.");
+      } else {
+        setError("Something went wrong loading that example — please try again in a moment.");
+      }
     } finally {
       setLoading(false);
     }

@@ -25,6 +25,14 @@ export async function fetchExamples(): Promise<Example[]> {
   return body.examples;
 }
 
+export class ExampleError extends Error {
+  status: number;
+  constructor(status: number, message: string) {
+    super(message);
+    this.status = status;
+  }
+}
+
 // matchExample runs the playlist-match flow against one of the curated
 // example playlists, riding on the one deliberate, owner-held session that
 // backs the whole "try an example" path — no Spotify account or login
@@ -37,7 +45,7 @@ export async function matchExample(id: string): Promise<MatchResult> {
   });
 
   if (!response.ok) {
-    throw new Error(await response.text());
+    throw new ExampleError(response.status, await response.text());
   }
 
   return response.json();
