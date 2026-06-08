@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"log"
@@ -8,6 +9,7 @@ import (
 
 	"github.com/andrewdeanphillips/karaoke-match/backend/internal/karaoke"
 	"github.com/andrewdeanphillips/karaoke-match/backend/internal/playlist"
+	"github.com/andrewdeanphillips/karaoke-match/backend/internal/spotify"
 )
 
 // matchResponse is the JSON body returned by the playlist match endpoint.
@@ -37,7 +39,24 @@ func (a *api) matchHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	artists, err := a.playlist.Import(r.Context(), req.URL)
+	accessToken, ok := spotify.AccessTokenFromContext(r.Context())
+	if !ok {
+		log.Print("playlist match: no access token in context — is the session middleware wired up?")
+		http.Error(w, "failed to import playlist", http.StatusInternalServerError)
+		return
+	}
+
+	a.runMatch(r.Context(), w, req.URL, accessToken)
+}
+
+// runMatch imports the artists credited on a playlist — authenticating with
+// Spotify via the given access token — checks each one's availability on
+// JOYSOUND, and writes the combined match response. It's the shared core of
+// matchHandler and exampleMatchHandler: both end up running exactly this
+// sequence, differing only in whose access token they hand it and how they
+// got hold of one.
+func (a *api) runMatch(ctx context.Context, w http.ResponseWriter, playlistURL, accessToken string) {
+	artists, err := a.playlist.Import(ctx, playlistURL, accessToken)
 	if err != nil {
 		if errors.Is(err, playlist.ErrInvalidPlaylistURL) {
 			http.Error(w, err.Error(), http.StatusBadRequest)
@@ -48,7 +67,7 @@ func (a *api) matchHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	results, err := a.karaoke.CheckAvailability(r.Context(), artists)
+	results, err := a.karaoke.CheckAvailability(ctx, artists)
 	if err != nil {
 		log.Printf("playlist match: checking availability: %v", err)
 		http.Error(w, "failed to check artist availability", http.StatusInternalServerError)

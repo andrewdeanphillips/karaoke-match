@@ -9,8 +9,9 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
-	"sync"
 	"time"
+
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 const tokenURL = "https://accounts.spotify.com/api/token"
@@ -31,18 +32,16 @@ type Client struct {
 	clientSecret string
 	redirectURI  string
 
-	userMu       sync.Mutex
-	userToken    string
-	userExpires  time.Time
-	refreshToken string
+	sessions sessionStore
 }
 
-func NewClient(clientID, clientSecret, redirectURI string) *Client {
+func NewClient(clientID, clientSecret, redirectURI string, pool *pgxpool.Pool) *Client {
 	return &Client{
 		httpClient:   &http.Client{Timeout: 10 * time.Second},
 		clientID:     clientID,
 		clientSecret: clientSecret,
 		redirectURI:  redirectURI,
+		sessions:     newPostgresSessionStore(pool),
 	}
 }
 
@@ -64,16 +63,24 @@ func (c *Client) AuthURL(state string) string {
 // "state" parameter — an unguessable value that ties an authorization
 // request to its callback, preventing cross-site request forgery.
 func GenerateState() (string, error) {
+	return randomToken()
+}
+
+// randomToken returns a random, URL-safe string suitable for any value that
+// must be unguessable: OAuth state, session IDs, and the like.
+func randomToken() (string, error) {
 	b := make([]byte, 16)
 	if _, err := rand.Read(b); err != nil {
-		return "", fmt.Errorf("generating state: %w", err)
+		return "", fmt.Errorf("generating random token: %w", err)
 	}
 	return base64.URLEncoding.EncodeToString(b), nil
 }
 
 // ExchangeCode trades an authorization code (received on the OAuth callback)
-// for a user access token and refresh token, caching both for GetUserToken.
-func (c *Client) ExchangeCode(ctx context.Context, code string) error {
+// for a user access token and refresh token, persists them as a new session,
+// and returns that session's ID — the value the caller should hand back to
+// the visitor's browser as a cookie.
+func (c *Client) ExchangeCode(ctx context.Context, code string) (string, error) {
 	form := url.Values{}
 	form.Set("grant_type", "authorization_code")
 	form.Set("code", code)
@@ -81,50 +88,65 @@ func (c *Client) ExchangeCode(ctx context.Context, code string) error {
 
 	token, err := c.requestUserToken(ctx, form)
 	if err != nil {
-		return fmt.Errorf("exchanging authorization code: %w", err)
+		return "", fmt.Errorf("exchanging authorization code: %w", err)
 	}
 
-	c.userMu.Lock()
-	defer c.userMu.Unlock()
-	c.userToken = token.AccessToken
-	c.userExpires = time.Now().Add(time.Duration(token.ExpiresIn)*time.Second - expiryBuffer)
-	c.refreshToken = token.RefreshToken
+	id, err := randomToken()
+	if err != nil {
+		return "", fmt.Errorf("generating session ID: %w", err)
+	}
 
-	return nil
+	sess := session{
+		ID:           id,
+		AccessToken:  token.AccessToken,
+		RefreshToken: token.RefreshToken,
+		ExpiresAt:    time.Now().Add(time.Duration(token.ExpiresIn)*time.Second - expiryBuffer),
+	}
+	if err := c.sessions.create(ctx, sess); err != nil {
+		return "", fmt.Errorf("creating session: %w", err)
+	}
+
+	return id, nil
 }
 
-// GetUserToken returns the cached user access token, transparently using the
-// refresh token to obtain a new one when the cached token has expired.
-func (c *Client) GetUserToken(ctx context.Context) (string, error) {
-	c.userMu.Lock()
-	defer c.userMu.Unlock()
-
-	if c.userToken != "" && time.Now().Before(c.userExpires) {
-		return c.userToken, nil
+// AccessToken returns a valid access token for the given session, transparently
+// using the session's refresh token to obtain and persist a new one when the
+// stored token has expired.
+func (c *Client) AccessToken(ctx context.Context, sessionID string) (string, error) {
+	sess, ok, err := c.sessions.lookup(ctx, sessionID)
+	if err != nil {
+		return "", fmt.Errorf("looking up session: %w", err)
+	}
+	if !ok {
+		return "", fmt.Errorf("no Spotify session found — visit /auth/login first")
 	}
 
-	if c.refreshToken == "" {
-		return "", fmt.Errorf("no Spotify user session — visit /auth/login first")
+	if time.Now().Before(sess.ExpiresAt) {
+		return sess.AccessToken, nil
 	}
 
 	form := url.Values{}
 	form.Set("grant_type", "refresh_token")
-	form.Set("refresh_token", c.refreshToken)
+	form.Set("refresh_token", sess.RefreshToken)
 
 	token, err := c.requestUserToken(ctx, form)
 	if err != nil {
 		return "", fmt.Errorf("refreshing user token: %w", err)
 	}
 
-	c.userToken = token.AccessToken
-	c.userExpires = time.Now().Add(time.Duration(token.ExpiresIn)*time.Second - expiryBuffer)
 	// Spotify doesn't always issue a new refresh token on renewal — keep the
 	// existing one whenever it omits a replacement.
+	refreshToken := sess.RefreshToken
 	if token.RefreshToken != "" {
-		c.refreshToken = token.RefreshToken
+		refreshToken = token.RefreshToken
+	}
+	expiresAt := time.Now().Add(time.Duration(token.ExpiresIn)*time.Second - expiryBuffer)
+
+	if err := c.sessions.updateTokens(ctx, sessionID, token.AccessToken, refreshToken, expiresAt); err != nil {
+		return "", fmt.Errorf("persisting refreshed session: %w", err)
 	}
 
-	return c.userToken, nil
+	return token.AccessToken, nil
 }
 
 // requestUserToken performs the token-endpoint exchange shared by the
@@ -157,18 +179,15 @@ func (c *Client) requestUserToken(ctx context.Context, form url.Values) (*userTo
 }
 
 // GetPlaylistTracks returns every track in the given playlist, following
-// Spotify's pagination until there are no more pages left.
-func (c *Client) GetPlaylistTracks(ctx context.Context, playlistID string) ([]Track, error) {
-	token, err := c.GetUserToken(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("getting user access token: %w", err)
-	}
-
+// Spotify's pagination until there are no more pages left. accessToken is the
+// caller's responsibility to resolve (see AccessToken) — this method has no
+// opinion about whose session it belongs to.
+func (c *Client) GetPlaylistTracks(ctx context.Context, playlistID, accessToken string) ([]Track, error) {
 	var tracks []Track
 	pageURL := fmt.Sprintf("%s/playlists/%s/items", apiBaseURL, playlistID)
 
 	for pageURL != "" {
-		page, err := c.fetchPlaylistTracksPage(ctx, pageURL, token)
+		page, err := c.fetchPlaylistTracksPage(ctx, pageURL, accessToken)
 		if err != nil {
 			return nil, err
 		}

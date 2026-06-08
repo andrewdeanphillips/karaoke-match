@@ -5,6 +5,8 @@ import (
 	"errors"
 	"log"
 	"net/http"
+
+	"github.com/andrewdeanphillips/karaoke-match/backend/internal/spotify"
 )
 
 // Handler exposes the playlist domain over HTTP.
@@ -18,6 +20,8 @@ func NewHandler(service *Service) *Handler {
 
 // Import handles POST /playlist/import: it accepts a Spotify playlist URL and
 // responds with the unique artists credited across that playlist's tracks.
+// It must run behind the Spotify session middleware, which resolves the
+// visitor's access token into the request context before this ever runs.
 func (h *Handler) Import(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -30,7 +34,14 @@ func (h *Handler) Import(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	artists, err := h.service.Import(r.Context(), req.URL)
+	accessToken, ok := spotify.AccessTokenFromContext(r.Context())
+	if !ok {
+		log.Print("playlist import: no access token in context — is the session middleware wired up?")
+		http.Error(w, "failed to import playlist", http.StatusInternalServerError)
+		return
+	}
+
+	artists, err := h.service.Import(r.Context(), req.URL, accessToken)
 	if err != nil {
 		if errors.Is(err, ErrInvalidPlaylistURL) {
 			http.Error(w, err.Error(), http.StatusBadRequest)
