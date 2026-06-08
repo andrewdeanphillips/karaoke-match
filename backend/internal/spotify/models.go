@@ -1,14 +1,8 @@
 package spotify
 
-type tokenResponse struct {
-	AccessToken string `json:"access_token"`
-	TokenType   string `json:"token_type"`
-	ExpiresIn   int    `json:"expires_in"`
-}
-
 // userTokenResponse mirrors Spotify's token response for the Authorization
-// Code and refresh_token grants — richer than the client-credentials shape,
-// since it carries the granted scope and a refresh token for renewal.
+// Code and refresh_token grants, including the granted scope and a refresh
+// token for renewal.
 type userTokenResponse struct {
 	AccessToken  string `json:"access_token"`
 	TokenType    string `json:"token_type"`
