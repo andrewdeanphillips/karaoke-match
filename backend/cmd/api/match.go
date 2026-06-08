@@ -8,6 +8,7 @@ import (
 
 	"github.com/andrewdeanphillips/karaoke-match/backend/internal/karaoke"
 	"github.com/andrewdeanphillips/karaoke-match/backend/internal/playlist"
+	"github.com/andrewdeanphillips/karaoke-match/backend/internal/spotify"
 )
 
 // matchResponse is the JSON body returned by the playlist match endpoint.
@@ -37,7 +38,14 @@ func (a *api) matchHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	artists, err := a.playlist.Import(r.Context(), req.URL)
+	accessToken, ok := spotify.AccessTokenFromContext(r.Context())
+	if !ok {
+		log.Print("playlist match: no access token in context — is the session middleware wired up?")
+		http.Error(w, "failed to import playlist", http.StatusInternalServerError)
+		return
+	}
+
+	artists, err := a.playlist.Import(r.Context(), req.URL, accessToken)
 	if err != nil {
 		if errors.Is(err, playlist.ErrInvalidPlaylistURL) {
 			http.Error(w, err.Error(), http.StatusBadRequest)

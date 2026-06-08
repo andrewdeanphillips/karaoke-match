@@ -10,6 +10,15 @@ import (
 
 const stateCookieName = "spotify_auth_state"
 
+// sessionCookieName names the long-lived, HttpOnly cookie that carries a
+// visitor's session ID — the same opaque value stored as spotify_sessions.id,
+// so resolving it is a single lookup by primary key. 30 days balances not
+// asking returning visitors to log in again against Spotify's own refresh
+// token lifetime.
+const sessionCookieName = "spotify_session"
+
+const sessionCookieMaxAge = 30 * 24 * 60 * 60 // 30 days, in seconds
+
 // spotifyLoginHandler starts the Authorization Code flow: it generates a
 // CSRF-guarding state value, remembers it in a short-lived cookie, and
 // redirects the browser to Spotify's consent page.
@@ -56,12 +65,46 @@ func (a *api) spotifyCallbackHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := a.spotify.ExchangeCode(r.Context(), code); err != nil {
+	sessionID, err := a.spotify.ExchangeCode(r.Context(), code)
+	if err != nil {
 		log.Printf("spotify callback: exchanging code failed: %v", err)
 		http.Error(w, "failed to complete Spotify authorization", http.StatusInternalServerError)
 		return
 	}
 
+	http.SetCookie(w, &http.Cookie{
+		Name:     sessionCookieName,
+		Value:    sessionID,
+		Path:     "/",
+		MaxAge:   sessionCookieMaxAge,
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+	})
+
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	fmt.Fprintln(w, "Spotify authorization complete — you can close this tab.")
+}
+
+// requireSpotifySession wraps a handler so it only runs for visitors with a
+// valid Spotify session: it resolves the session cookie to a fresh access
+// token — refreshing it first if it's gone stale — and carries that token in
+// the request context for the handler to use (see spotify.AccessTokenFromContext).
+// Visitors without a usable session are turned away with 401 before the
+// wrapped handler ever runs.
+func (a *api) requireSpotifySession(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		cookie, err := r.Cookie(sessionCookieName)
+		if err != nil {
+			http.Error(w, "log in with Spotify first", http.StatusUnauthorized)
+			return
+		}
+
+		token, err := a.spotify.AccessToken(r.Context(), cookie.Value)
+		if err != nil {
+			http.Error(w, "log in with Spotify first", http.StatusUnauthorized)
+			return
+		}
+
+		next(w, r.WithContext(spotify.ContextWithAccessToken(r.Context(), token)))
+	}
 }

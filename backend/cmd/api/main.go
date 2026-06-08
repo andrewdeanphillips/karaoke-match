@@ -27,8 +27,12 @@ type api struct {
 func withCORS(allowedOrigin string, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Access-Control-Allow-Origin", allowedOrigin)
-		w.Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
 		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+		// Visitor sessions ride on a cookie, so the browser must be told it's
+		// allowed to send and store credentials on cross-origin requests —
+		// it otherwise strips Set-Cookie from responses and Cookie from requests.
+		w.Header().Set("Access-Control-Allow-Credentials", "true")
 
 		if r.Method == http.MethodOptions {
 			w.WriteHeader(http.StatusNoContent)
@@ -82,14 +86,14 @@ func main() {
 	if spotifyClientID == "" || spotifyClientSecret == "" || spotifyRedirectURI == "" {
 		log.Fatal("SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET, and SPOTIFY_REDIRECT_URI environment variables are required")
 	}
-	spotifyClient := spotify.NewClient(spotifyClientID, spotifyClientSecret, spotifyRedirectURI)
-
 	ctx := context.Background()
 	pool, err := database.NewPool(ctx, dbURL)
 	if err != nil {
 		log.Fatalf("connecting to database: %v", err)
 	}
 	defer pool.Close()
+
+	spotifyClient := spotify.NewClient(spotifyClientID, spotifyClientSecret, spotifyRedirectURI, pool)
 
 	playlistService := playlist.NewService(spotifyClient)
 	a := &api{db: pool, spotify: spotifyClient, karaoke: karaoke.NewService(pool), playlist: playlistService}
@@ -99,8 +103,8 @@ func main() {
 	mux.HandleFunc("/health", a.healthHandler)
 	mux.HandleFunc("/auth/login", a.spotifyLoginHandler)
 	mux.HandleFunc("/callback", a.spotifyCallbackHandler)
-	mux.HandleFunc("/playlist/import", playlistHandler.Import)
-	mux.HandleFunc("/playlist/match", a.matchHandler)
+	mux.HandleFunc("/playlist/import", a.requireSpotifySession(playlistHandler.Import))
+	mux.HandleFunc("/playlist/match", a.requireSpotifySession(a.matchHandler))
 
 	handler := withCORS(frontendOrigin, mux)
 

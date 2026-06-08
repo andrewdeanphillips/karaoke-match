@@ -72,14 +72,16 @@ func NewService(spotifyClient *spotify.Client) *Service {
 }
 
 // Import returns the unique artists credited across every track in the
-// playlist identified by the given Spotify playlist URL.
-func (s *Service) Import(ctx context.Context, playlistURL string) ([]string, error) {
+// playlist identified by the given Spotify playlist URL. accessToken
+// authenticates the request as the visitor whose session resolved it — see
+// spotify.AccessTokenFromContext.
+func (s *Service) Import(ctx context.Context, playlistURL, accessToken string) ([]string, error) {
 	id, err := parsePlaylistID(playlistURL)
 	if err != nil {
 		return nil, err
 	}
 
-	tracks, err := s.spotify.GetPlaylistTracks(ctx, id)
+	tracks, err := s.spotify.GetPlaylistTracks(ctx, id, accessToken)
 	if err != nil {
 		return nil, fmt.Errorf("fetching playlist tracks: %w", err)
 	}
