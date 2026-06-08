@@ -43,7 +43,8 @@ type artistObject struct {
 }
 
 // Track is the playlist data we expose beyond this package — just enough to
-// extract artists and match against DAM, without leaking Spotify's JSON shape.
+// extract artists and match against a karaoke catalog, without leaking
+// Spotify's JSON shape.
 type Track struct {
 	Name    string
 	Artists []string

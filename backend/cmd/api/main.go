@@ -12,6 +12,7 @@ import (
 	"github.com/joho/godotenv"
 
 	"github.com/andrewdeanphillips/karaoke-match/backend/internal/database"
+	"github.com/andrewdeanphillips/karaoke-match/backend/internal/karaoke"
 	"github.com/andrewdeanphillips/karaoke-match/backend/internal/playlist"
 	"github.com/andrewdeanphillips/karaoke-match/backend/internal/spotify"
 )
@@ -19,6 +20,7 @@ import (
 type api struct {
 	db      *pgxpool.Pool
 	spotify *spotify.Client
+	karaoke *karaoke.Service
 }
 
 func withCORS(allowedOrigin string, next http.Handler) http.Handler {
@@ -88,7 +90,7 @@ func main() {
 	}
 	defer pool.Close()
 
-	a := &api{db: pool, spotify: spotifyClient}
+	a := &api{db: pool, spotify: spotifyClient, karaoke: karaoke.NewService()}
 	playlistHandler := playlist.NewHandler(playlist.NewService(spotifyClient))
 
 	mux := http.NewServeMux()

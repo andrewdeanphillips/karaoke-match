@@ -2,7 +2,7 @@
 
 ## Goal
 
-Deliver a working application that allows a user to paste a public Spotify playlist URL and determine which artists are available on DAM.
+Deliver a working application that allows a user to paste a public Spotify playlist URL and determine which artists are available on JOYSOUND.
 
 The MVP prioritizes validation of the core product idea over completeness.
 
@@ -66,17 +66,17 @@ Bring Me The Horizon
 
 ---
 
-# Milestone 3: DAM Integration
+# Milestone 3: JOYSOUND Integration
 
 ## Objective
 
-Determine whether an artist exists on DAM.
+Determine whether an artist exists on JOYSOUND.
 
 ## Tasks
 
-* Implement DAM client
-* Integrate discovered DAM search API
-* Parse API responses
+* Implement JOYSOUND client
+* Integrate JOYSOUND search results page
+* Parse search-results HTML
 * Return availability result
 
 ## Success Criteria
@@ -99,12 +99,12 @@ Available: Yes
 
 ## Objective
 
-Combine Spotify import and DAM matching.
+Combine Spotify import and JOYSOUND matching.
 
 ## Tasks
 
 * Process all playlist artists
-* Query DAM for each artist
+* Query JOYSOUND for each artist
 * Aggregate results
 * Return match summary
 
@@ -112,11 +112,11 @@ Combine Spotify import and DAM matching.
 
 Display:
 
-| Artist               | DAM |
-| -------------------- | --- |
-| Architects           | Yes |
-| Polaris              | No  |
-| Bring Me The Horizon | Yes |
+| Artist               | JOYSOUND |
+| -------------------- | -------- |
+| Architects           | Yes      |
+| Thornhill            | No       |
+| Bring Me The Horizon | Yes      |
 
 This milestone delivers the first complete version of the product.
 
@@ -126,12 +126,12 @@ This milestone delivers the first complete version of the product.
 
 ## Objective
 
-Reduce repeated DAM lookups.
+Reduce repeated JOYSOUND lookups.
 
 ## Tasks
 
 * Create availability table
-* Check cache before DAM requests
+* Check cache before JOYSOUND requests
 * Store lookup results
 * Record last_checked timestamp
 
@@ -158,7 +158,7 @@ Provide a polished user experience.
 
 ```text
 24 artists found
-18 available on DAM
+18 available on JOYSOUND
 75% coverage
 ```
 
@@ -192,7 +192,6 @@ Application is accessible through a public URL.
 
 The following features are intentionally deferred:
 
-* JOYSOUND integration
 * Song-level matching
 * Spotify OAuth
 * User accounts
@@ -213,7 +212,7 @@ A user can:
 
 1. Paste a public Spotify playlist URL
 2. Import playlist artists
-3. Check artist availability on DAM
+3. Check artist availability on JOYSOUND
 4. View results in a web interface
 5. Receive responses backed by a local cache
 
