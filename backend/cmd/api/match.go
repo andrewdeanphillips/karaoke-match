@@ -12,9 +12,10 @@ import (
 
 // matchResponse is the JSON body returned by the playlist match endpoint.
 // Results may be shorter than TotalArtists — CheckAvailability caps how many
-// artists it looks up per call, so callers can distinguish a complete check
-// from a truncated one rather than mistaking a short list for the full
-// picture.
+// live JOYSOUND searches a single check will make, so a playlist with many
+// uncached artists can end up only partially checked. TotalArtists lets
+// callers distinguish that from a complete check rather than mistaking a
+// short list for the full picture.
 type matchResponse struct {
 	Results      []karaoke.AvailabilityResult `json:"results"`
 	TotalArtists int                          `json:"totalArtists"`

@@ -92,7 +92,7 @@ func main() {
 	defer pool.Close()
 
 	playlistService := playlist.NewService(spotifyClient)
-	a := &api{db: pool, spotify: spotifyClient, karaoke: karaoke.NewService(), playlist: playlistService}
+	a := &api{db: pool, spotify: spotifyClient, karaoke: karaoke.NewService(pool), playlist: playlistService}
 	playlistHandler := playlist.NewHandler(playlistService)
 
 	mux := http.NewServeMux()
