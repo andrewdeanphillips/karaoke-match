@@ -3,7 +3,7 @@ import { matchPlaylist, MatchError } from "../api/match";
 import type { MatchResult } from "../types/match";
 import PlaylistForm from "../components/PlaylistForm";
 import SummaryStats from "../components/SummaryStats";
-import ResultsTable from "../components/ResultsTable";
+import ResultsList from "../components/ResultsList";
 
 function MatchPage() {
   const [result, setResult] = useState<MatchResult | null>(null);
@@ -31,16 +31,20 @@ function MatchPage() {
   }
 
   return (
-    <main>
+    <main className="page">
       <h1>KaraokeMatch</h1>
+      <p className="intro">
+        Paste one of your Spotify playlist URLs to see which of its artists
+        are available on JOYSOUND.
+      </p>
       <PlaylistForm onSubmit={handleSubmit} disabled={loading} />
-      {loading && <p>Checking…</p>}
-      {error && <p>Error: {error}</p>}
+      {loading && <p className="status">Checking…</p>}
+      {error && <p className="status status--error">{error}</p>}
       {result && (
-        <>
+        <div className="section">
           <SummaryStats result={result} />
-          <ResultsTable results={result.results} />
-        </>
+          <ResultsList results={result.results} />
+        </div>
       )}
     </main>
   );

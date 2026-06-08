@@ -34,22 +34,24 @@ function SpotifySessionGate({ children }: SpotifySessionGateProps) {
 
   if (status === "checking") {
     return (
-      <main>
+      <main className="page">
         <h1>KaraokeMatch</h1>
-        <p>Checking your Spotify session…</p>
+        <p className="status">Checking your Spotify session…</p>
       </main>
     );
   }
 
   if (status === "loggedOut") {
     return (
-      <main>
+      <main className="page">
         <h1>KaraokeMatch</h1>
-        <p>
+        <p className="intro">
           KaraokeMatch reads playlists from your own Spotify account, so
           you'll need to log in to get started.
         </p>
-        <a href={loginURL}>Log in with Spotify</a>
+        <a href={loginURL} className="button button--primary">
+          Log in with Spotify
+        </a>
         <TryAnExample />
       </main>
     );

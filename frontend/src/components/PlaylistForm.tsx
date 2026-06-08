@@ -15,15 +15,18 @@ function PlaylistForm({ onSubmit, disabled }: PlaylistFormProps) {
   }
 
   return (
-    <form onSubmit={handleSubmit}>
-      <label htmlFor="playlist-url">Spotify playlist URL</label>
-      <input
-        id="playlist-url"
-        type="text"
-        value={url}
-        onChange={(event) => setUrl(event.target.value)}
-        disabled={disabled}
-      />
+    <form className="playlist-form" onSubmit={handleSubmit}>
+      <div>
+        <label htmlFor="playlist-url">Spotify playlist URL</label>
+        <input
+          id="playlist-url"
+          type="text"
+          placeholder="https://open.spotify.com/playlist/…"
+          value={url}
+          onChange={(event) => setUrl(event.target.value)}
+          disabled={disabled}
+        />
+      </div>
       <button type="submit" disabled={disabled}>
         Check availability
       </button>

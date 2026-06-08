@@ -11,15 +11,26 @@ function SummaryStats({ result }: SummaryStatsProps) {
   const partial = checkedCount < result.totalArtists;
 
   return (
-    <section>
-      <p>
-        {checkedCount} artist{checkedCount === 1 ? "" : "s"} checked
-        {partial && ` (out of ${result.totalArtists} found)`}
-      </p>
-      <p>{availableCount} available on JOYSOUND</p>
-      <p>{coveragePercent}% coverage</p>
+    <section className="stats-section">
+      <div className="stats">
+        <div className="stat">
+          <span className="stat-value">{checkedCount}</span>
+          <span className="stat-label">
+            artist{checkedCount === 1 ? "" : "s"} checked
+            {partial && ` of ${result.totalArtists}`}
+          </span>
+        </div>
+        <div className="stat">
+          <span className="stat-value">{availableCount}</span>
+          <span className="stat-label">available on JOYSOUND</span>
+        </div>
+        <div className="stat">
+          <span className="stat-value">{coveragePercent}%</span>
+          <span className="stat-label">coverage</span>
+        </div>
+      </div>
       {partial && (
-        <p>
+        <p className="status">
           JOYSOUND lookups are limited per request, so only the first{" "}
           {checkedCount} of {result.totalArtists} artists could be checked
           this time.

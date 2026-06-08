@@ -3,7 +3,7 @@ import { fetchExamples, matchExample } from "../api/examples";
 import type { Example } from "../api/examples";
 import type { MatchResult } from "../types/match";
 import SummaryStats from "./SummaryStats";
-import ResultsTable from "./ResultsTable";
+import ResultsList from "./ResultsList";
 
 // TryAnExample lets a visitor without a Spotify account see KaraokeMatch run
 // end-to-end anyway — one click against a playlist Andrew picked himself,
@@ -51,25 +51,32 @@ function TryAnExample() {
   const active = examples.find((example) => example.id === activeID);
 
   return (
-    <section>
-      <h2>Try an example — no login required</h2>
-      <p>See how KaraokeMatch handles a few playlists Andrew picked himself.</p>
-      <ul>
+    <section className="section">
+      <h2>Try an example</h2>
+      <p className="intro">
+        No Spotify account needed — see how KaraokeMatch handles a few
+        playlists Andrew picked himself.
+      </p>
+      <div className="example-buttons">
         {examples.map((example) => (
-          <li key={example.id}>
-            <button onClick={() => handleTry(example)} disabled={loading}>
-              {example.name}
-            </button>
-          </li>
+          <button
+            key={example.id}
+            type="button"
+            className="button button--secondary"
+            onClick={() => handleTry(example)}
+            disabled={loading}
+          >
+            {example.name}
+          </button>
         ))}
-      </ul>
-      {loading && <p>Checking {active?.name}…</p>}
-      {error && <p>Error: {error}</p>}
+      </div>
+      {loading && <p className="status">Checking {active?.name}…</p>}
+      {error && <p className="status status--error">{error}</p>}
       {result && (
-        <>
+        <div className="section">
           <SummaryStats result={result} />
-          <ResultsTable results={result.results} />
-        </>
+          <ResultsList results={result.results} />
+        </div>
       )}
     </section>
   );
