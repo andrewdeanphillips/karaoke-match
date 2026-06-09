@@ -5,6 +5,7 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 export type Example = {
   id: string;
   name: string;
+  url: string;
 };
 
 type ExamplesResponse = {

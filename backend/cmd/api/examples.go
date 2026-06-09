@@ -119,6 +119,7 @@ func findCuratedExample(id string) (curatedExample, bool) {
 type exampleSummary struct {
 	ID   string `json:"id"`
 	Name string `json:"name"`
+	URL  string `json:"url"`
 }
 
 type examplesResponse struct {
@@ -138,7 +139,7 @@ func (a *api) examplesListHandler(w http.ResponseWriter, r *http.Request) {
 	examples := []exampleSummary{}
 	if a.exampleSessionID != "" {
 		for _, example := range curatedExamples {
-			examples = append(examples, exampleSummary{ID: example.ID, Name: example.Name})
+			examples = append(examples, exampleSummary{ID: example.ID, Name: example.Name, URL: example.URL})
 		}
 	}
 

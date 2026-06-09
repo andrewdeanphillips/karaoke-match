@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { matchPlaylist, MatchError } from "../api/match";
 import type { MatchResult } from "../types/match";
 import PlaylistForm from "../components/PlaylistForm";
@@ -9,6 +9,16 @@ function MatchPage() {
   const [result, setResult] = useState<MatchResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [slowLoad, setSlowLoad] = useState(false);
+
+  useEffect(() => {
+    if (!loading) {
+      setSlowLoad(false);
+      return;
+    }
+    const timer = setTimeout(() => setSlowLoad(true), 3000);
+    return () => clearTimeout(timer);
+  }, [loading]);
 
   async function handleSubmit(url: string) {
     setError(null);
@@ -38,7 +48,13 @@ function MatchPage() {
         are available on JOYSOUND.
       </p>
       <PlaylistForm onSubmit={handleSubmit} disabled={loading} />
-      {loading && <p className="status">Checking…</p>}
+      {loading && (
+        <p className="status">
+          {slowLoad
+            ? "Still checking — JOYSOUND lookups are paced to avoid hammering their servers, so a large playlist can take up to 10 seconds."
+            : "Checking…"}
+        </p>
+      )}
       {error && <p className="status status--error">{error}</p>}
       {result && (
         <div className="section">

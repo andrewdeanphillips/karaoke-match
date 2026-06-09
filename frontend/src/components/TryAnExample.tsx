@@ -16,18 +16,26 @@ function TryAnExample() {
   const [result, setResult] = useState<MatchResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [slowLoad, setSlowLoad] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
-
     fetchExamples().then((fetched) => {
       if (!cancelled) setExamples(fetched);
     });
-
     return () => {
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    if (!loading) {
+      setSlowLoad(false);
+      return;
+    }
+    const timer = setTimeout(() => setSlowLoad(true), 3000);
+    return () => clearTimeout(timer);
+  }, [loading]);
 
   async function handleTry(example: Example) {
     setActiveID(example.id);
@@ -63,18 +71,33 @@ function TryAnExample() {
       </p>
       <div className="example-buttons">
         {examples.map((example) => (
-          <button
-            key={example.id}
-            type="button"
-            className="button button--secondary"
-            onClick={() => handleTry(example)}
-            disabled={loading}
-          >
-            {example.name}
-          </button>
+          <div key={example.id} className="example-item">
+            <button
+              type="button"
+              className="button button--secondary"
+              onClick={() => handleTry(example)}
+              disabled={loading}
+            >
+              {example.name}
+            </button>
+            <a
+              href={example.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="example-playlist-link"
+            >
+              view playlist ↗
+            </a>
+          </div>
         ))}
       </div>
-      {loading && <p className="status">Checking {active?.name}…</p>}
+      {loading && (
+        <p className="status">
+          {slowLoad
+            ? `Still checking — large playlists can take up to 10 seconds.`
+            : `Checking ${active?.name}…`}
+        </p>
+      )}
       {error && <p className="status status--error">{error}</p>}
       {result && (
         <div className="section">
