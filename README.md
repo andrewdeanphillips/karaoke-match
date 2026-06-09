@@ -58,7 +58,8 @@ User → React frontend → Go API ─┬─→ Spotify Web API   (playlist impo
    return a partial result — the UI reports exactly how many artists were
    checked.
 4. The combined results — per-artist availability plus how many were actually
-   checked — are returned to the frontend.
+   checked — are returned to the frontend. Available artists link directly to
+   their JOYSOUND artist page.
 
 ## Architecture
 
