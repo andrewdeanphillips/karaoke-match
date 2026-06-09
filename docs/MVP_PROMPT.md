@@ -1,3 +1,11 @@
+> **What this file is:** The initial context prompt given to Claude before the
+> first line of code was written. It defines the working style, architectural
+> constraints, and teaching mode that governed the three-day build (7–9 June 2026).
+> This file has not been modified since the first commit — what you see here
+> is the day-0 collaboration contract.
+
+---
+
 You are acting as a senior Go engineer, software architect, and technical mentor.
 
 Before making any decisions, please read:

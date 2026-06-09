@@ -1,5 +1,15 @@
 # KaraokeMatch
 
+> **What this file is:** The original project plan, written before any code.
+> It is preserved as the day-0 plan, lightly annotated where reality later
+> diverged (those notes are called out inline). The biggest divergence: **DAM**
+> was the karaoke catalog chosen at the outset, but it was replaced by
+> **JOYSOUND** in Milestone 3 — so the DAM references throughout the sections
+> below reflect the original intent, not what shipped. See Phase 4 and
+> [`DEVELOPMENT_STORY.md`](DEVELOPMENT_STORY.md) for why the swap happened.
+
+---
+
 ## Project Overview
 
 KaraokeMatch helps users determine which songs and artists from their Spotify playlists are available on Japanese karaoke services.
@@ -83,7 +93,7 @@ requiring the backend to complete an OAuth Authorization Code exchange — at
 the time, a one-time backend technical step that stayed invisible to end
 users (a single shared session was enough, because Spotify still returned
 track data for any playlist to any authenticated app). Then, in their
-February 2026 Web API changes, Spotify restricted playlist track data to
+early 2026 Web API changes, Spotify restricted playlist track data to
 playlists the *authenticated account* owns or collaborates on — public or
 not. That makes "their own playlists" a literal, per-visitor requirement:
 each user must now log in with their own Spotify account for the feature to
@@ -111,7 +121,7 @@ Requirements:
 
 * The user must be logged in with their own Spotify account
 * The playlist must be one the user owns or collaborates on — per Spotify's
-  February 2026 Web API restrictions, track data is no longer available for
+  early 2026 Web API restrictions, track data is no longer available for
   other playlists, public or not
 
 ---
@@ -362,7 +372,7 @@ Benefits:
 
 Per-visitor "Login with Spotify" and access to one's own playlists are now
 part of the MVP itself (Milestone 7 in `MVP_ROADMAP.md`) — Spotify's
-February 2026 API changes made that a prerequisite for the core feature
+early 2026 API changes made that a prerequisite for the core feature
 rather than a future nice-to-have. What remains a deferred enhancement is
 *persisting* that beyond a single session:
 
@@ -376,28 +386,16 @@ Additional tables:
 
 ---
 
-## Phase 4: JOYSOUND Integration
+## Phase 4: JOYSOUND Integration ✓ (shipped in MVP)
 
-Add support for JOYSOUND.
+JOYSOUND replaced DAM as the karaoke catalog source in Milestone 3. Its
+search results are server-rendered HTML with embedded artist IDs and
+`data-tracking-*` attributes — no internal API reverse-engineering required.
+`robots.txt` explicitly permits the search route. The `artistId` in results
+provides a stable per-artist identifier that anchors repeat lookups to the
+same catalog entry.
 
-Current investigation suggests:
-
-* Search pages are accessible
-* Search results can be rendered server-side
-* A structured API has not yet been identified
-
-Potential implementation approaches:
-
-* Discover internal API endpoints
-* Parse search responses
-* Parse React/Next.js response payloads
-
-Result format:
-
-| Artist     | DAM | JOYSOUND |
-| ---------- | --- | -------- |
-| Architects | Yes | Yes      |
-| Polaris    | No  | Yes      |
+See `MVP_ROADMAP.md` for what shipped in the MVP.
 
 ---
 
@@ -427,7 +425,11 @@ Suggested:
 
 ## Phase 6: Microservice Architecture
 
-Split monolith into services.
+Split the monolith into services as a learning exercise in microservice
+patterns — understanding how and where to draw the boundaries, and how
+gRPC contracts would replace the in-process interfaces already in the
+architecture. The interface seams (`catalog`, `cache`, `limiter`) were
+shaped with this in mind.
 
 ### API Service
 
@@ -450,13 +452,12 @@ Communication:
 * Protocol Buffers
 * gRPC
 
-This phase aligns closely with Mercari's architecture.
-
 ---
 
 ## Phase 7: Event-Driven Processing
 
-Introduce asynchronous processing.
+Introduce asynchronous processing via Pub/Sub as a learning exercise in
+event-driven architecture.
 
 ### Google Pub/Sub
 

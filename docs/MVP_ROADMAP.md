@@ -178,7 +178,7 @@ Replace the single shared Spotify session with real per-visitor
 authentication, so that "check your own playlists" is true for every visitor
 — not just whoever last logged in.
 
-This milestone exists because Spotify's February 2026 Web API changes mean
+This milestone exists because Spotify's early 2026 Web API changes mean
 playlist track data is now only returned for playlists the authenticated
 account owns or collaborates on, for any app in Development Mode (see
 `ARCHITECTURE.md` and `PROJECT_PLAN.md` for the full account of how this was

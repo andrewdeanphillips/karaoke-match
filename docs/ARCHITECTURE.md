@@ -22,11 +22,11 @@ This allows focus on validating the product idea rather than infrastructure.
 
 The most likely future changes are:
 
-* DAM → DAM + JOYSOUND
+* JOYSOUND → JOYSOUND + additional karaoke catalogs
 * Artist matching → Song matching
-* Public playlist access → Private playlist access + saved imports (extending
-  the OAuth mechanism already required for reading public playlists with
-  broader scopes and user accounts)
+* Per-visitor sessions → saved imports and search history across visits
+  (the per-visitor OAuth sessions already shipped; persisting their results
+  is the remaining step)
 * Synchronous processing → Background jobs
 * Monolith → Microservices
 
@@ -34,13 +34,17 @@ A domain-oriented structure makes these changes easier to implement without larg
 
 ### Natural Evolution Path
 
-The Karaoke domain can later become its own service using:
+This is a learning project, and the architecture reflects that. The
+domain-oriented modular monolith keeps the application simple to build and
+reason about while practising the boundary-drawing and interface-design
+thinking that applies at any scale. The `catalog`, `cache`, and `limiter`
+interfaces are shaped by how a real microservice would expose its contracts —
+not because extraction is planned, but because designing to that shape is part
+of what makes the architecture worth building.
 
-* Protocol Buffers
-* gRPC
-* Pub/Sub
-
-This aligns with technologies commonly used in large-scale backend systems while avoiding unnecessary complexity during the MVP stage.
+The Future Evolution section below sketches what further growth would look
+like — as much for the learning value of thinking through the patterns as for
+any real operational need.
 
 ---
 
@@ -130,7 +134,7 @@ Responsible for:
 * Playlist retrieval
 * Metadata normalization
 * Per-visitor session and token management (login, persistence, refresh —
-  see Future Evolution, Phase 2)
+  shipped in the MVP; see Future Evolution, Phase 1)
 
 ## Karaoke
 
@@ -177,7 +181,7 @@ coverage of logic that can actually break, not 100% coverage for its own sake.
 * Prefer **table-driven tests** for functions with multiple input/output
   cases — Go's idiomatic alternative to parameterized tests
 * Use Go interfaces to substitute fakes for external dependencies (e.g., a
-  fake DAM client when testing matching logic), avoiding the need for a
+  fake JOYSOUND client when testing matching logic), avoiding the need for a
   mocking framework
 * `net/http/httptest` is used to test HTTP handlers without running a server
 
@@ -218,7 +222,8 @@ Add:
 
 ### Phase 3
 
-Extract Karaoke domain into a separate service.
+The `catalog` and `cache` interface boundaries are the natural extraction
+point if the Karaoke domain were ever split into its own service:
 
 ```text
 Frontend
@@ -232,7 +237,8 @@ PostgreSQL
 
 ### Phase 4
 
-Introduce asynchronous processing.
+Asynchronous processing via Pub/Sub would decouple playlist import from
+availability checking:
 
 ```text
 Playlist Imported
@@ -243,5 +249,3 @@ Karaoke Service
 ↓
 Store Results
 ```
-
-This allows the architecture to grow incrementally while preserving a working and maintainable MVP.
