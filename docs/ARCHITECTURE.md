@@ -58,13 +58,9 @@ Go API
 
 ↓
 
-PostgreSQL
+PostgreSQL / Spotify Web API / JOYSOUND
 
-↓
-
-DAM Search API
-
-The application is initially deployed as a single monolithic service on Cloud Run.
+The application is deployed as a single monolithic service on Cloud Run.
 
 ---
 
@@ -74,39 +70,36 @@ The application is initially deployed as a single monolithic service on Cloud Ru
 backend/
 ├── cmd/
 │   └── api/
-│       └── main.go
+│       ├── main.go
+│       ├── match.go
+│       ├── examples.go
+│       ├── spotify_auth.go
+│       └── web.go
 │
 ├── internal/
-│
 │   ├── playlist/
-│   │   ├── handler.go
 │   │   ├── service.go
 │   │   └── models.go
 │
 │   ├── spotify/
 │   │   ├── client.go
+│   │   ├── session.go
+│   │   ├── context.go
 │   │   └── models.go
 │
 │   ├── karaoke/
 │   │   ├── service.go
-│   │   ├── dam_client.go
 │   │   ├── joysound_client.go
-│   │   ├── matcher.go
 │   │   ├── repository.go
 │   │   └── models.go
 │
-│   ├── database/
-│   │   └── postgres.go
-│
-│   └── shared/
-│       └── types.go
+│   └── database/
+│       └── postgres.go
 │
 ├── migrations/
 ├── Dockerfile
 └── go.mod
 ```
-
-Frontend:
 
 ```text
 frontend/
@@ -143,10 +136,8 @@ Responsible for:
 
 Responsible for:
 
-* DAM integration
-* JOYSOUND integration
-* Matching logic
-* Availability lookup
+* JOYSOUND integration (scraping, artist matching)
+* Availability lookup and result aggregation
 * Caching strategy
 
 This is expected to become the largest domain and a potential future microservice.
@@ -170,10 +161,10 @@ frameworks or assertion libraries are needed at this scale.
 
 Tests focus on **domain logic with real value to verify**:
 
-* Artist/song extraction from playlist data
-* DAM API response parsing
-* Matching logic (availability lookups, result aggregation)
-* Cache read/write behavior
+* Artist extraction from playlist data
+* JOYSOUND search result parsing and artist matching
+* Availability lookup and result aggregation
+* Cache read/write behavior and TTL freshness logic
 
 Trivial code — simple struct wiring, thin handlers that just delegate to a
 service, configuration loading — is left untested. The goal is meaningful
@@ -202,34 +193,7 @@ to testing without overengineering process for an MVP.
 
 # Future Evolution
 
-### Phase 1 (MVP)
-
-Monolith
-
-```text
-Frontend
-↓
-Go API
-↓
-PostgreSQL
-↓
-DAM
-```
-
-### Phase 2
-
-Add:
-
-* Song matching
-* JOYSOUND support
-* Per-visitor Spotify sessions — Spotify's February 2026 API changes mean
-  playlist data is now only available for playlists the authenticated
-  account owns or collaborates on, so this is no longer an optional
-  enhancement but a prerequisite for the core feature to work for anyone but
-  the app's own developer. Unlike the other items in this phase, this one
-  *does* require an architectural change: a session store mapping browser
-  sessions to Spotify tokens, replacing the single shared in-memory session
-  the MVP launched with.
+### Phase 1 (MVP) — shipped
 
 ```text
 Frontend
@@ -238,8 +202,19 @@ Go API
 ↓
 Session Store (Postgres) ←→ Spotify (per-visitor tokens)
 ↓
-DAM / JOYSOUND
+JOYSOUND
 ```
+
+Delivered: playlist matching, JOYSOUND availability checks, Postgres-backed
+availability cache, per-visitor Spotify sessions, no-login demo path, Cloud
+Run deployment.
+
+### Phase 2
+
+Add:
+
+* Song-level matching (currently artist-level only)
+* Additional karaoke catalog sources alongside JOYSOUND
 
 ### Phase 3
 
