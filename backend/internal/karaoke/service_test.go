@@ -143,9 +143,9 @@ func TestCheckAvailability(t *testing.T) {
 		}
 
 		want := []AvailabilityResult{
-			{Artist: "Bring Me The Horizon", Available: true},
+			{Artist: "Bring Me The Horizon", Available: true, JoysoundURL: "https://www.joysound.com/web/search/artist/62831"},
 			{Artist: "Thornhill", Available: false},
-			{Artist: "Architects", Available: true},
+			{Artist: "Architects", Available: true, JoysoundURL: "https://www.joysound.com/web/search/artist/1"},
 		}
 		if !slices.Equal(got, want) {
 			t.Errorf("got %v, want %v", got, want)
@@ -175,12 +175,32 @@ func TestCheckAvailability(t *testing.T) {
 		}
 
 		want := []AvailabilityResult{
-			{Artist: "Architects", Available: true},           // fresh cache hit
-			{Artist: "Bring Me The Horizon", Available: true}, // stale entry, refreshed live
-			{Artist: "Thornhill", Available: false},           // cache miss, searched live
+			{Artist: "Architects", Available: true},                                                                   // fresh cache hit — no ID in fake entry
+			{Artist: "Bring Me The Horizon", Available: true, JoysoundURL: "https://www.joysound.com/web/search/artist/62831"}, // stale, refreshed live
+			{Artist: "Thornhill", Available: false},                                                                   // cache miss, not found live
 		}
 		if !slices.Equal(got, want) {
 			t.Errorf("got %v, want %v", got, want)
+		}
+	})
+
+	t.Run("populates JoysoundURL from catalog artist ID", func(t *testing.T) {
+		cache := &fakeCache{entries: map[string]cacheEntry{
+			"Architects": {Available: true, CatalogArtistID: "62831", LastChecked: time.Now()},
+			"Thornhill":  {Available: false, CatalogArtistID: "", LastChecked: time.Now()},
+		}}
+		svc := &Service{joysound: fakeCatalog{}, cache: cache, limiter: noopLimiter{}}
+
+		got, err := svc.CheckAvailability(context.Background(), []string{"Architects", "Thornhill"})
+		if err != nil {
+			t.Fatalf("CheckAvailability returned error: %v", err)
+		}
+
+		if got[0].JoysoundURL != "https://www.joysound.com/web/search/artist/62831" {
+			t.Errorf("Architects JoysoundURL = %q, want JOYSOUND artist link", got[0].JoysoundURL)
+		}
+		if got[1].JoysoundURL != "" {
+			t.Errorf("Thornhill JoysoundURL = %q, want empty (not found on JOYSOUND)", got[1].JoysoundURL)
 		}
 	})
 

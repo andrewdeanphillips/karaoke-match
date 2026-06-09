@@ -1,6 +1,7 @@
 export type AvailabilityResult = {
   artist: string;
   available: boolean;
+  joysoundUrl?: string;
 };
 
 export type MatchResult = {

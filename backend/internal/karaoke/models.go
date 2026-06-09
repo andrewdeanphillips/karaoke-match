@@ -12,8 +12,11 @@ type Artist struct {
 }
 
 // AvailabilityResult pairs an artist name with whether JOYSOUND lists them —
-// the unit of output for a playlist-wide availability check.
+// the unit of output for a playlist-wide availability check. JoysoundURL is
+// the direct link to the artist's JOYSOUND page; it is only present when the
+// artist was found (available artists always have one, unavailable ones never do).
 type AvailabilityResult struct {
-	Artist    string `json:"artist"`
-	Available bool   `json:"available"`
+	Artist     string `json:"artist"`
+	Available  bool   `json:"available"`
+	JoysoundURL string `json:"joysoundUrl,omitempty"`
 }

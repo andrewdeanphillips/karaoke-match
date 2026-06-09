@@ -54,7 +54,15 @@ function ResultsColumn({ label, artists, variant }: ResultsColumnProps) {
       {artists.length > 0 ? (
         <ul>
           {artists.map((result) => (
-            <li key={result.artist}>{result.artist}</li>
+            <li key={result.artist}>
+              {result.joysoundUrl ? (
+                <a href={result.joysoundUrl} target="_blank" rel="noopener noreferrer">
+                  {result.artist}
+                </a>
+              ) : (
+                result.artist
+              )}
+            </li>
           ))}
         </ul>
       ) : (

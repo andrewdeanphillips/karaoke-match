@@ -78,6 +78,12 @@ func NewService(pool *pgxpool.Pool) *Service {
 	return &Service{joysound: newJoysoundClient(), cache: newPostgresCache(pool), limiter: &rateLimiter{}}
 }
 
+// joysoundArtistURL returns the direct link to an artist's JOYSOUND page.
+// id is JOYSOUND's own stable numeric identifier (e.g. "62831").
+func joysoundArtistURL(id string) string {
+	return "https://www.joysound.com/web/search/artist/" + id
+}
+
 // searchLive paces itself against JOYSOUND's servers, searches live for the
 // given artist, and caches what it finds for next time (best-effort — a
 // caching failure is logged rather than failing the lookup, for the same
@@ -87,12 +93,12 @@ func NewService(pool *pgxpool.Pool) *Service {
 // matches, so every result search returns is already an artist — we just
 // need to confirm one of them is actually the artist we're looking for,
 // rather than a same-named act in JOYSOUND's catalog.
-func (s *Service) searchLive(ctx context.Context, artist string) (bool, error) {
+func (s *Service) searchLive(ctx context.Context, artist string) (cacheEntry, error) {
 	s.limiter.wait()
 
 	artists, err := s.joysound.search(ctx, artist)
 	if err != nil {
-		return false, fmt.Errorf("searching JOYSOUND for artist %q: %w", artist, err)
+		return cacheEntry{}, fmt.Errorf("searching JOYSOUND for artist %q: %w", artist, err)
 	}
 
 	match, available := findArtistNamed(artists, artist)
@@ -101,7 +107,17 @@ func (s *Service) searchLive(ctx context.Context, artist string) (bool, error) {
 		log.Printf("caching availability for artist %q: %v", artist, err)
 	}
 
-	return available, nil
+	return entry, nil
+}
+
+// resultFromEntry builds an AvailabilityResult from a cache entry, including
+// the JOYSOUND artist URL when the entry has a catalog ID.
+func resultFromEntry(artist string, entry cacheEntry) AvailabilityResult {
+	result := AvailabilityResult{Artist: artist, Available: entry.Available}
+	if entry.CatalogArtistID != "" {
+		result.JoysoundURL = joysoundArtistURL(entry.CatalogArtistID)
+	}
+	return result
 }
 
 // CheckAvailability reports JOYSOUND availability for each of the given
@@ -127,7 +143,7 @@ func (s *Service) CheckAvailability(ctx context.Context, artists []string) ([]Av
 
 	for _, artist := range artists {
 		if entry, ok := cached[artist]; ok && time.Since(entry.LastChecked) < cacheTTL {
-			results = append(results, AvailabilityResult{Artist: artist, Available: entry.Available})
+			results = append(results, resultFromEntry(artist, entry))
 			continue
 		}
 
@@ -135,12 +151,12 @@ func (s *Service) CheckAvailability(ctx context.Context, artists []string) ([]Av
 			break
 		}
 
-		available, err := s.searchLive(ctx, artist)
+		entry, err := s.searchLive(ctx, artist)
 		if err != nil {
 			return nil, err
 		}
 		liveSearches++
-		results = append(results, AvailabilityResult{Artist: artist, Available: available})
+		results = append(results, resultFromEntry(artist, entry))
 	}
 	return results, nil
 }
