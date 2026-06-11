@@ -11,6 +11,17 @@ type Artist struct {
 	Name string
 }
 
+// Song is a karaoke-catalog search result that JOYSOUND itself classifies as
+// a song match — distinct from artist results, which the search page renders
+// in a separate section. ID is JOYSOUND's own stable identifier (e.g. the
+// "82077" in /web/search/song/82077). Artist is the song's credited artist as
+// JOYSOUND lists it, used to confirm a title match is for the right artist.
+type Song struct {
+	ID     string
+	Title  string
+	Artist string
+}
+
 // AvailabilityResult pairs an artist name with whether JOYSOUND lists them —
 // the unit of output for a playlist-wide availability check. JoysoundURL is
 // the direct link to the artist's JOYSOUND page; it is only present when the
