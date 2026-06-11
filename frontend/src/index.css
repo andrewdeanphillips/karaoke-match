@@ -223,47 +223,34 @@ input[type="search"]:focus {
   margin-bottom: 1.5rem;
 }
 
-.results-columns {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 2rem;
+.results-table {
+  width: 100%;
+  border-collapse: collapse;
 }
 
-@media (max-width: 540px) {
-  .results-columns {
-    grid-template-columns: 1fr;
-    gap: 1.5rem;
-  }
-}
-
-.results-column-heading {
-  display: flex;
-  align-items: baseline;
-  gap: 0.4rem;
-}
-
-.results-column-heading .count {
+.results-table th {
+  text-align: left;
   font-size: 0.8125rem;
-  font-weight: 400;
+  font-weight: 600;
   color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 0.5rem 0.625rem;
+  border-bottom: 1px solid var(--border);
 }
 
-.results-column ul {
-  display: flex;
-  flex-direction: column;
-  gap: 0.375rem;
+.results-table td {
+  padding: 0.5rem 0.625rem;
+  border-bottom: 1px solid var(--border);
 }
 
-.results-column li {
-  padding: 0.375rem 0.625rem;
-  border-radius: 6px;
-  background: var(--surface);
-  color: var(--text);
+.results-table tr:last-child td {
+  border-bottom: none;
 }
 
-.results-column--available li {
-  background: var(--available-bg);
+.results-table a {
   color: var(--available);
+  font-weight: 500;
 }
 
 .results-empty {

@@ -15,8 +15,7 @@ import (
 // enough that tests can substitute a fake and exercise matching/aggregation
 // logic without making live requests to JOYSOUND.
 type catalog interface {
-	search(ctx context.Context, keyword string) ([]Artist, error)
-	searchSongs(ctx context.Context, keyword string) ([]Song, error)
+	searchCross(ctx context.Context, keyword string) ([]Song, []Artist, error)
 }
 
 // pauseBetweenSearches is the minimum spacing rateLimiter enforces between
@@ -51,10 +50,10 @@ func (r *rateLimiter) wait() {
 }
 
 // maxLiveSearchesPerCheck bounds how many live JOYSOUND searches a single
-// CheckAvailability call will make. Cache hits are free and don't count
-// against it — only artists that actually require a live lookup spend from
-// this budget, so a well-cached playlist can be checked more completely than
-// a cold one for the same JOYSOUND cost.
+// CheckTrackAvailability call will make. Cache hits are free and don't count
+// against it — only tracks/artists that actually require a live lookup spend
+// from this budget, so a well-cached playlist can be checked more completely
+// than a cold one for the same JOYSOUND cost.
 const maxLiveSearchesPerCheck = 50
 
 // catalogName identifies JOYSOUND in cached records. Service is JOYSOUND-
@@ -92,24 +91,24 @@ func joysoundSongURL(id string) string {
 }
 
 // searchLive paces itself against JOYSOUND's servers, searches live for the
-// given artist, and caches what it finds for next time (best-effort — a
-// caching failure is logged rather than failing the lookup, for the same
+// given artist by name, and caches what it finds for next time (best-effort
+// — a caching failure is logged rather than failing the lookup, for the same
 // reason a cache-read failure is).
 //
 // JOYSOUND's search-results page itself separates artist matches from song
-// matches, so every result search returns is already an artist — we just
-// need to confirm one of them is actually the artist we're looking for,
+// matches, so every artist result a search returns is already an artist — we
+// just need to confirm one of them is actually the artist we're looking for,
 // rather than a same-named act in JOYSOUND's catalog.
 func (s *Service) searchLive(ctx context.Context, artist string) (cacheEntry, error) {
 	s.limiter.wait()
 
-	artists, err := s.joysound.search(ctx, artist)
+	_, artists, err := s.joysound.searchCross(ctx, artist)
 	if err != nil {
 		return cacheEntry{}, fmt.Errorf("searching JOYSOUND for artist %q: %w", artist, err)
 	}
 
-	match, available := findArtistNamed(artists, artist)
-	entry := cacheEntry{Available: available, CatalogArtistID: match.ID, LastChecked: time.Now()}
+	match, ok := findArtistMatching(artists, artist)
+	entry := cacheEntry{Available: ok, CatalogArtistID: match.ID, LastChecked: time.Now()}
 	if err := s.cache.store(ctx, catalogName, artist, entry); err != nil {
 		log.Printf("caching availability for artist %q: %v", artist, err)
 	}
@@ -117,60 +116,9 @@ func (s *Service) searchLive(ctx context.Context, artist string) (cacheEntry, er
 	return entry, nil
 }
 
-// resultFromEntry builds an AvailabilityResult from a cache entry, including
-// the JOYSOUND artist URL when the entry has a catalog ID.
-func resultFromEntry(artist string, entry cacheEntry) AvailabilityResult {
-	result := AvailabilityResult{Artist: artist, Available: entry.Available}
-	if entry.CatalogArtistID != "" {
-		result.JoysoundURL = joysoundArtistURL(entry.CatalogArtistID)
-	}
-	return result
-}
-
-// CheckAvailability reports JOYSOUND availability for each of the given
-// artists, in the order given, stopping early if answering the next one would
-// exceed maxLiveSearchesPerCheck live JOYSOUND searches. Artists with a fresh
-// cached result are free — only artists that actually require a live search
-// count against that limit, so a well-cached playlist can yield more results
-// than a cold one would, for the same JOYSOUND cost.
-//
-// Cache lookups for every artist are batched into one round trip up front
-// (rather than one round trip per artist) — the playlists this checks can
-// have dozens of unique artists, and against a remote database each round
-// trip costs real network latency.
-func (s *Service) CheckAvailability(ctx context.Context, artists []string) ([]AvailabilityResult, error) {
-	cached, err := s.cache.lookupBatch(ctx, catalogName, artists)
-	if err != nil {
-		log.Printf("batch-checking cache for %d artists: %v", len(artists), err)
-		cached = nil
-	}
-
-	results := make([]AvailabilityResult, 0, len(artists))
-	liveSearches := 0
-
-	for _, artist := range artists {
-		if entry, ok := cached[artist]; ok && time.Since(entry.LastChecked) < cacheTTL {
-			results = append(results, resultFromEntry(artist, entry))
-			continue
-		}
-
-		if liveSearches >= maxLiveSearchesPerCheck {
-			break
-		}
-
-		entry, err := s.searchLive(ctx, artist)
-		if err != nil {
-			return nil, err
-		}
-		liveSearches++
-		results = append(results, resultFromEntry(artist, entry))
-	}
-	return results, nil
-}
-
-// findArtistNamed returns the first result whose name matches the given
+// findArtistMatching returns the first result whose name matches the given
 // name, ignoring case to tolerate capitalization differences.
-func findArtistNamed(artists []Artist, name string) (Artist, bool) {
+func findArtistMatching(artists []Artist, name string) (Artist, bool) {
 	for _, a := range artists {
 		if strings.EqualFold(a.Name, name) {
 			return a, true
@@ -192,84 +140,42 @@ func findSongMatching(songs []Song, title, artist string) (Song, bool) {
 	return Song{}, false
 }
 
-// resultFromSongEntry builds a TrackAvailabilityResult from a cached song
-// entry. JoysoundURL points at the matched song's page when one was found;
-// otherwise, if the track's artist is available, it falls back to the
-// artist's page using cachedArtists.
-func resultFromSongEntry(track Track, entry songCacheEntry, cachedArtists map[string]cacheEntry) TrackAvailabilityResult {
-	result := TrackAvailabilityResult{Artist: track.Artist, Title: track.Title, Available: entry.Available}
-	switch {
-	case entry.CatalogSongID != "":
-		result.JoysoundURL = joysoundSongURL(entry.CatalogSongID)
-	case entry.Available:
-		if artistEntry, ok := cachedArtists[track.Artist]; ok && artistEntry.CatalogArtistID != "" {
-			result.JoysoundURL = joysoundArtistURL(artistEntry.CatalogArtistID)
-		}
+// buildResult assembles a TrackAvailabilityResult from a track's resolved
+// song and artist cache entries. Either URL is present only when its entry
+// has a catalog ID — the two are independent, so a track can have a song
+// link, an artist link, both, or neither.
+func buildResult(track Track, songEntry songCacheEntry, artistEntry cacheEntry) TrackAvailabilityResult {
+	result := TrackAvailabilityResult{Artist: track.Artist, Title: track.Title}
+	if songEntry.CatalogSongID != "" {
+		result.SongJoysoundURL = joysoundSongURL(songEntry.CatalogSongID)
+	}
+	if artistEntry.CatalogArtistID != "" {
+		result.ArtistJoysoundURL = joysoundArtistURL(artistEntry.CatalogArtistID)
 	}
 	return result
 }
 
-// artistAvailable reports whether a track's artist is available on JOYSOUND,
-// preferring a fresh cached entry and otherwise spending one live search (if
-// budget allows). On a live search, cachedArtists is updated in place so a
-// later call to resultFromSongEntry for the same artist can find its
-// catalog ID for the fallback URL.
-//
-// If budget is exhausted with no fresh cache entry, this reports
-// unavailable without searching — the same approximation CheckAvailability
-// makes when its own budget runs out, just at a finer grain. The track's
-// song-cache entry will simply be re-checked after cacheTTL.
-func (s *Service) artistAvailable(ctx context.Context, artist string, cachedArtists map[string]cacheEntry, budget int) (bool, int, error) {
-	if entry, ok := cachedArtists[artist]; ok && time.Since(entry.LastChecked) < cacheTTL {
-		return entry.Available, 0, nil
+// freshSongEntry returns a track's cached song entry if one exists and is
+// within cacheTTL.
+func freshSongEntry(cached map[Track]songCacheEntry, track Track) (songCacheEntry, bool) {
+	entry, ok := cached[track]
+	if !ok || time.Since(entry.LastChecked) >= cacheTTL {
+		return songCacheEntry{}, false
 	}
-
-	if budget < 1 {
-		return false, 0, nil
-	}
-
-	entry, err := s.searchLive(ctx, artist)
-	if err != nil {
-		return false, 1, err
-	}
-	cachedArtists[artist] = entry
-	return entry.Available, 1, nil
+	return entry, true
 }
 
-// searchSongLive paces itself against JOYSOUND's servers, searches live for
-// the given track by title, and caches what it finds for next time. If no
-// song result matches both the track's title and artist, it falls back to
-// artistAvailable so the track still gets a useful result when JOYSOUND has
-// the artist but not this specific song.
-//
-// It returns the cache entry to build a result from, and how many live
-// JOYSOUND searches it performed (1 for the song search, plus 1 more if the
-// artist fallback also required a live search).
-func (s *Service) searchSongLive(ctx context.Context, track Track, cachedArtists map[string]cacheEntry, budget int) (songCacheEntry, int, error) {
-	s.limiter.wait()
-
-	songs, err := s.joysound.searchSongs(ctx, track.Title)
-	if err != nil {
-		return songCacheEntry{}, 1, fmt.Errorf("searching JOYSOUND for song %q by %q: %w", track.Title, track.Artist, err)
+// freshArtistEntry returns an artist's cached entry if one exists and is
+// within cacheTTL.
+func freshArtistEntry(cached map[string]cacheEntry, artist string) (cacheEntry, bool) {
+	entry, ok := cached[artist]
+	if !ok || time.Since(entry.LastChecked) >= cacheTTL {
+		return cacheEntry{}, false
 	}
-
-	if match, ok := findSongMatching(songs, track.Title, track.Artist); ok {
-		entry := songCacheEntry{Available: true, CatalogSongID: match.ID, LastChecked: time.Now()}
-		s.storeSongEntry(ctx, track, entry)
-		return entry, 1, nil
-	}
-
-	available, searchesUsed, err := s.artistAvailable(ctx, track.Artist, cachedArtists, budget-1)
-	if err != nil {
-		return songCacheEntry{}, 1 + searchesUsed, err
-	}
-
-	entry := songCacheEntry{Available: available, LastChecked: time.Now()}
-	s.storeSongEntry(ctx, track, entry)
-	return entry, 1 + searchesUsed, nil
+	return entry, true
 }
 
-// storeSongEntry caches a track's availability (best-effort — a caching
+// storeSongEntry caches a track's song availability (best-effort — a caching
 // failure is logged rather than failing the lookup, for the same reason
 // searchLive's caching failure is).
 func (s *Service) storeSongEntry(ctx context.Context, track Track, entry songCacheEntry) {
@@ -278,13 +184,72 @@ func (s *Service) storeSongEntry(ctx context.Context, track Track, entry songCac
 	}
 }
 
-// CheckTrackAvailability reports JOYSOUND availability for each of the given
-// tracks, in the order given, stopping early if answering the next one would
-// exceed maxLiveSearchesPerCheck live JOYSOUND searches. It mirrors
-// CheckAvailability's caching and budget behavior at song granularity: a
-// fresh cached result is free, and cache lookups for every track (and every
-// track's artist, for the fallback path) are batched into one round trip
-// each up front.
+// resolveTrack resolves whichever of a track's song and artist entries
+// aren't already fresh, spending up to budget live JOYSOUND searches, and
+// returns the resolved entries plus how many searches it performed.
+//
+// If the song entry isn't fresh, it runs one combined search keyed on the
+// track's title — JOYSOUND's cross-search returns both song and artist
+// results in the same response, so if the artist entry also isn't fresh, it
+// may be resolved from that same page for free. Only if the artist still
+// isn't resolved (and budget remains) does this spend a second search keyed
+// on the artist's name, mirroring the matching searchLive already does for
+// artist-only lookups.
+func (s *Service) resolveTrack(ctx context.Context, track Track, songEntry songCacheEntry, artistEntry cacheEntry, songFresh, artistFresh bool, cachedArtists map[string]cacheEntry, budget int) (songCacheEntry, cacheEntry, int, error) {
+	searches := 0
+
+	if !songFresh {
+		s.limiter.wait()
+
+		songs, artists, err := s.joysound.searchCross(ctx, track.Title)
+		if err != nil {
+			return songCacheEntry{}, cacheEntry{}, searches, fmt.Errorf("searching JOYSOUND for %q by %q: %w", track.Title, track.Artist, err)
+		}
+		searches++
+
+		songEntry = songCacheEntry{LastChecked: time.Now()}
+		if match, ok := findSongMatching(songs, track.Title, track.Artist); ok {
+			songEntry.Available = true
+			songEntry.CatalogSongID = match.ID
+		}
+		s.storeSongEntry(ctx, track, songEntry)
+
+		if !artistFresh {
+			if match, ok := findArtistMatching(artists, track.Artist); ok {
+				artistEntry = cacheEntry{Available: true, CatalogArtistID: match.ID, LastChecked: time.Now()}
+				if err := s.cache.store(ctx, catalogName, track.Artist, artistEntry); err != nil {
+					log.Printf("caching availability for artist %q: %v", track.Artist, err)
+				}
+				cachedArtists[track.Artist] = artistEntry
+				artistFresh = true
+			}
+		}
+	}
+
+	if !artistFresh {
+		if searches >= budget {
+			return songEntry, artistEntry, searches, nil
+		}
+
+		entry, err := s.searchLive(ctx, track.Artist)
+		if err != nil {
+			return songEntry, artistEntry, searches, err
+		}
+		searches++
+		cachedArtists[track.Artist] = entry
+		artistEntry = entry
+	}
+
+	return songEntry, artistEntry, searches, nil
+}
+
+// CheckTrackAvailability reports JOYSOUND links for each of the given
+// tracks, in the order given, stopping early if resolving the next one could
+// exceed maxLiveSearchesPerCheck live JOYSOUND searches. A track whose song
+// and artist entries are both fresh in the cache is free; otherwise
+// resolveTrack spends up to two live searches on it. Cache lookups for every
+// track (and every track's artist) are batched into one round trip each up
+// front.
 func (s *Service) CheckTrackAvailability(ctx context.Context, tracks []Track) ([]TrackAvailabilityResult, error) {
 	cachedSongs, err := s.cache.lookupSongBatch(ctx, catalogName, tracks)
 	if err != nil {
@@ -309,21 +274,23 @@ func (s *Service) CheckTrackAvailability(ctx context.Context, tracks []Track) ([
 	liveSearches := 0
 
 	for _, track := range tracks {
-		if entry, ok := cachedSongs[track]; ok && time.Since(entry.LastChecked) < cacheTTL {
-			results = append(results, resultFromSongEntry(track, entry, cachedArtists))
-			continue
+		songEntry, songFresh := freshSongEntry(cachedSongs, track)
+		artistEntry, artistFresh := freshArtistEntry(cachedArtists, track.Artist)
+
+		if !songFresh || !artistFresh {
+			if liveSearches >= maxLiveSearchesPerCheck {
+				break
+			}
+
+			var searches int
+			songEntry, artistEntry, searches, err = s.resolveTrack(ctx, track, songEntry, artistEntry, songFresh, artistFresh, cachedArtists, maxLiveSearchesPerCheck-liveSearches)
+			if err != nil {
+				return nil, err
+			}
+			liveSearches += searches
 		}
 
-		if liveSearches >= maxLiveSearchesPerCheck {
-			break
-		}
-
-		entry, searches, err := s.searchSongLive(ctx, track, cachedArtists, maxLiveSearchesPerCheck-liveSearches)
-		if err != nil {
-			return nil, err
-		}
-		liveSearches += searches
-		results = append(results, resultFromSongEntry(track, entry, cachedArtists))
+		results = append(results, buildResult(track, songEntry, artistEntry))
 	}
 	return results, nil
 }

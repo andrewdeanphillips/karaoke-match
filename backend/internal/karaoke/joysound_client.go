@@ -35,30 +35,20 @@ func newJoysoundClient() *joysoundClient {
 	return &joysoundClient{httpClient: &http.Client{Timeout: 10 * time.Second}}
 }
 
-// search runs a JOYSOUND keyword search and returns every artist JOYSOUND's
-// own search-results page identifies as a match.
-func (c *joysoundClient) search(ctx context.Context, keyword string) ([]Artist, error) {
+// searchCross runs a JOYSOUND keyword search and returns every song and
+// artist JOYSOUND's own search-results page identifies as a match — both
+// result types are rendered in the same response, so one fetch covers both.
+func (c *joysoundClient) searchCross(ctx context.Context, keyword string) ([]Song, []Artist, error) {
 	doc, err := c.fetchSearchDoc(ctx, keyword)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	return findArtists(doc), nil
-}
-
-// searchSongs runs a JOYSOUND keyword search and returns every song
-// JOYSOUND's own search-results page identifies as a match.
-func (c *joysoundClient) searchSongs(ctx context.Context, keyword string) ([]Song, error) {
-	doc, err := c.fetchSearchDoc(ctx, keyword)
-	if err != nil {
-		return nil, err
-	}
-	return findSongs(doc), nil
+	return findSongs(doc), findArtists(doc), nil
 }
 
 // fetchSearchDoc runs a JOYSOUND keyword search and returns the parsed HTML
-// of the results page, shared by search and searchSongs since both read from
-// the same response — JOYSOUND's cross-search returns artist and song
-// results in a single page.
+// of the results page, shared by searchCross's song and artist parsing —
+// JOYSOUND's cross-search returns both result types in a single page.
 func (c *joysoundClient) fetchSearchDoc(ctx context.Context, keyword string) (*html.Node, error) {
 	reqURL := searchURL + "?match=1&keyword=" + url.QueryEscape(keyword)
 

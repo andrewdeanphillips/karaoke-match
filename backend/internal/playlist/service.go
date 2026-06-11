@@ -42,23 +42,36 @@ func parsePlaylistID(rawURL string) (string, error) {
 	return id, nil
 }
 
-// uniqueArtists returns every artist credited on any of the given tracks,
-// each appearing once, in the order they were first encountered.
-func uniqueArtists(tracks []spotify.Track) []string {
-	seen := make(map[string]struct{})
-	var artists []string
+// trackKey identifies a track by its title and primary (first-credited)
+// artist — the same pair karaoke.Track matches against, so deduping on it
+// here avoids redundant JOYSOUND lookups for repeated tracks.
+type trackKey struct {
+	artist string
+	title  string
+}
+
+// uniqueTracks returns every track from the given list, each appearing once,
+// in the order first encountered. Tracks are deduplicated by their primary
+// artist and title; tracks with no artists contribute nothing, since there's
+// no artist to key or match against.
+func uniqueTracks(tracks []spotify.Track) []spotify.Track {
+	seen := make(map[trackKey]struct{})
+	var unique []spotify.Track
 
 	for _, track := range tracks {
-		for _, artist := range track.Artists {
-			if _, ok := seen[artist]; ok {
-				continue
-			}
-			seen[artist] = struct{}{}
-			artists = append(artists, artist)
+		if len(track.Artists) == 0 {
+			continue
 		}
+
+		key := trackKey{artist: track.Artists[0], title: track.Name}
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		unique = append(unique, track)
 	}
 
-	return artists
+	return unique
 }
 
 // Service orchestrates a playlist import: parsing the playlist URL, fetching
@@ -71,11 +84,10 @@ func NewService(spotifyClient *spotify.Client) *Service {
 	return &Service{spotify: spotifyClient}
 }
 
-// Import returns the unique artists credited across every track in the
-// playlist identified by the given Spotify playlist URL. accessToken
-// authenticates the request as the visitor whose session resolved it — see
-// spotify.AccessTokenFromContext.
-func (s *Service) Import(ctx context.Context, playlistURL, accessToken string) ([]string, error) {
+// Import returns the unique tracks in the playlist identified by the given
+// Spotify playlist URL. accessToken authenticates the request as the visitor
+// whose session resolved it — see spotify.AccessTokenFromContext.
+func (s *Service) Import(ctx context.Context, playlistURL, accessToken string) ([]spotify.Track, error) {
 	id, err := parsePlaylistID(playlistURL)
 	if err != nil {
 		return nil, err
@@ -86,5 +98,5 @@ func (s *Service) Import(ctx context.Context, playlistURL, accessToken string) (
 		return nil, fmt.Errorf("fetching playlist tracks: %w", err)
 	}
 
-	return uniqueArtists(tracks), nil
+	return uniqueTracks(tracks), nil
 }

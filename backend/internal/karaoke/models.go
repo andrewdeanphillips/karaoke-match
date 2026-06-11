@@ -22,16 +22,6 @@ type Song struct {
 	Artist string
 }
 
-// AvailabilityResult pairs an artist name with whether JOYSOUND lists them —
-// the unit of output for a playlist-wide availability check. JoysoundURL is
-// the direct link to the artist's JOYSOUND page; it is only present when the
-// artist was found (available artists always have one, unavailable ones never do).
-type AvailabilityResult struct {
-	Artist     string `json:"artist"`
-	Available  bool   `json:"available"`
-	JoysoundURL string `json:"joysoundUrl,omitempty"`
-}
-
 // Track is a playlist track to check for song-level availability — just
 // enough to search and match against JOYSOUND, independent of where it
 // came from.
@@ -40,14 +30,13 @@ type Track struct {
 	Title  string
 }
 
-// TrackAvailabilityResult pairs a playlist track with whether JOYSOUND lists
-// it — the unit of output for song-level availability checks. JoysoundURL
-// links to the matching song's JOYSOUND page when one was found, or to the
-// track's artist's page when JOYSOUND has the artist but not this specific
-// song; it is absent when neither was found.
+// TrackAvailabilityResult pairs a playlist track with links to its match (or
+// matches) on JOYSOUND. ArtistJoysoundURL and SongJoysoundURL are independent
+// — either, both, or neither may be present, depending on whether JOYSOUND
+// has the track's artist, the specific song, or both.
 type TrackAvailabilityResult struct {
-	Artist      string `json:"artist"`
-	Title       string `json:"title"`
-	Available   bool   `json:"available"`
-	JoysoundURL string `json:"joysoundUrl,omitempty"`
+	Artist            string `json:"artist"`
+	Title             string `json:"title"`
+	ArtistJoysoundURL string `json:"artistJoysoundUrl,omitempty"`
+	SongJoysoundURL   string `json:"songJoysoundUrl,omitempty"`
 }
