@@ -14,6 +14,7 @@ import (
 // JOYSOUND.
 type fakeCatalog struct {
 	artists map[string][]Artist
+	songs   map[string][]Song
 	err     error
 }
 
@@ -22,6 +23,13 @@ func (f fakeCatalog) search(_ context.Context, keyword string) ([]Artist, error)
 		return nil, f.err
 	}
 	return f.artists[keyword], nil
+}
+
+func (f fakeCatalog) searchSongs(_ context.Context, keyword string) ([]Song, error) {
+	if f.err != nil {
+		return nil, f.err
+	}
+	return f.songs[keyword], nil
 }
 
 // noopLimiter substitutes for rateLimiter in tests, letting multi-artist
@@ -42,6 +50,10 @@ type fakeCache struct {
 	entries          map[string]cacheEntry
 	stored           map[string]cacheEntry
 	lookupBatchCalls int
+
+	songEntries          map[Track]songCacheEntry
+	storedSongs          map[Track]songCacheEntry
+	lookupSongBatchCalls int
 }
 
 func (f *fakeCache) lookupBatch(_ context.Context, _ string, artists []string) (map[string]cacheEntry, error) {
@@ -61,6 +73,26 @@ func (f *fakeCache) store(_ context.Context, _, artist string, entry cacheEntry)
 		f.stored = make(map[string]cacheEntry)
 	}
 	f.stored[artist] = entry
+	return nil
+}
+
+func (f *fakeCache) lookupSongBatch(_ context.Context, _ string, tracks []Track) (map[Track]songCacheEntry, error) {
+	f.lookupSongBatchCalls++
+
+	found := make(map[Track]songCacheEntry)
+	for _, track := range tracks {
+		if entry, ok := f.songEntries[track]; ok {
+			found[track] = entry
+		}
+	}
+	return found, nil
+}
+
+func (f *fakeCache) storeSong(_ context.Context, _ string, track Track, entry songCacheEntry) error {
+	if f.storedSongs == nil {
+		f.storedSongs = make(map[Track]songCacheEntry)
+	}
+	f.storedSongs[track] = entry
 	return nil
 }
 
@@ -124,6 +156,270 @@ func TestFindArtistNamed(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestFindSongMatching(t *testing.T) {
+	tests := []struct {
+		name   string
+		songs  []Song
+		title  string
+		artist string
+		want   Song
+		wantOK bool
+	}{
+		{
+			name:   "no results",
+			songs:  nil,
+			title:  "Off The Edge feat.WISE",
+			artist: "Def Tech",
+			wantOK: false,
+		},
+		{
+			name: "exact match",
+			songs: []Song{
+				{ID: "82077", Title: "Off The Edge feat.WISE", Artist: "Def Tech"},
+			},
+			title:  "Off The Edge feat.WISE",
+			artist: "Def Tech",
+			want:   Song{ID: "82077", Title: "Off The Edge feat.WISE", Artist: "Def Tech"},
+			wantOK: true,
+		},
+		{
+			name: "case-insensitive match",
+			songs: []Song{
+				{ID: "82077", Title: "off the edge feat.wise", Artist: "def tech"},
+			},
+			title:  "Off The Edge feat.WISE",
+			artist: "Def Tech",
+			want:   Song{ID: "82077", Title: "off the edge feat.wise", Artist: "def tech"},
+			wantOK: true,
+		},
+		{
+			name: "title matches but artist doesn't",
+			songs: []Song{
+				{ID: "920844", Title: "maybe feat. Bring Me The Horizon", Artist: "MACHINE GUN KELLY"},
+			},
+			title:  "maybe feat. Bring Me The Horizon",
+			artist: "Bring Me The Horizon",
+			wantOK: false,
+		},
+		{
+			name: "match present among unrelated results",
+			songs: []Song{
+				{ID: "920844", Title: "maybe feat. Bring Me The Horizon", Artist: "MACHINE GUN KELLY"},
+				{ID: "82077", Title: "Off The Edge feat.WISE", Artist: "Def Tech"},
+			},
+			title:  "Off The Edge feat.WISE",
+			artist: "Def Tech",
+			want:   Song{ID: "82077", Title: "Off The Edge feat.WISE", Artist: "Def Tech"},
+			wantOK: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, ok := findSongMatching(tt.songs, tt.title, tt.artist)
+			if ok != tt.wantOK || got != tt.want {
+				t.Errorf("got (%v, %v), want (%v, %v)", got, ok, tt.want, tt.wantOK)
+			}
+		})
+	}
+}
+
+func TestCheckTrackAvailability(t *testing.T) {
+	t.Run("song match found live", func(t *testing.T) {
+		track := Track{Artist: "Def Tech", Title: "Off The Edge feat.WISE"}
+		svc := &Service{
+			joysound: fakeCatalog{songs: map[string][]Song{
+				"Off The Edge feat.WISE": {{ID: "82077", Title: "Off The Edge feat.WISE", Artist: "Def Tech"}},
+			}},
+			cache:   &fakeCache{},
+			limiter: noopLimiter{},
+		}
+
+		got, err := svc.CheckTrackAvailability(context.Background(), []Track{track})
+		if err != nil {
+			t.Fatalf("CheckTrackAvailability returned error: %v", err)
+		}
+
+		want := []TrackAvailabilityResult{
+			{Artist: "Def Tech", Title: "Off The Edge feat.WISE", Available: true, JoysoundURL: "https://www.joysound.com/web/search/song/82077"},
+		}
+		if !slices.Equal(got, want) {
+			t.Errorf("got %v, want %v", got, want)
+		}
+
+		stored, ok := svc.cache.(*fakeCache).storedSongs[track]
+		if !ok {
+			t.Fatal("expected song entry to be cached")
+		}
+		if stored.CatalogSongID != "82077" {
+			t.Errorf("cached CatalogSongID = %q, want %q", stored.CatalogSongID, "82077")
+		}
+	})
+
+	t.Run("no song match falls back to a live artist search", func(t *testing.T) {
+		track := Track{Artist: "Architects", Title: "Animals"}
+		svc := &Service{
+			joysound: fakeCatalog{
+				songs:   map[string][]Song{"Animals": {}},
+				artists: map[string][]Artist{"Architects": {{ID: "1", Name: "Architects"}}},
+			},
+			cache:   &fakeCache{},
+			limiter: noopLimiter{},
+		}
+
+		got, err := svc.CheckTrackAvailability(context.Background(), []Track{track})
+		if err != nil {
+			t.Fatalf("CheckTrackAvailability returned error: %v", err)
+		}
+
+		want := []TrackAvailabilityResult{
+			{Artist: "Architects", Title: "Animals", Available: true, JoysoundURL: "https://www.joysound.com/web/search/artist/1"},
+		}
+		if !slices.Equal(got, want) {
+			t.Errorf("got %v, want %v", got, want)
+		}
+
+		stored, ok := svc.cache.(*fakeCache).storedSongs[track]
+		if !ok {
+			t.Fatal("expected song entry to be cached")
+		}
+		if stored.CatalogSongID != "" {
+			t.Errorf("cached CatalogSongID = %q, want empty (no song match, artist fallback)", stored.CatalogSongID)
+		}
+	})
+
+	t.Run("no song match and artist not found", func(t *testing.T) {
+		track := Track{Artist: "Thornhill", Title: "Discipline"}
+		svc := &Service{
+			joysound: fakeCatalog{
+				songs:   map[string][]Song{"Discipline": {}},
+				artists: map[string][]Artist{"Thornhill": {}},
+			},
+			cache:   &fakeCache{},
+			limiter: noopLimiter{},
+		}
+
+		got, err := svc.CheckTrackAvailability(context.Background(), []Track{track})
+		if err != nil {
+			t.Fatalf("CheckTrackAvailability returned error: %v", err)
+		}
+
+		want := []TrackAvailabilityResult{
+			{Artist: "Thornhill", Title: "Discipline", Available: false},
+		}
+		if !slices.Equal(got, want) {
+			t.Errorf("got %v, want %v", got, want)
+		}
+	})
+
+	t.Run("fresh song cache hit with a song ID is free", func(t *testing.T) {
+		track := Track{Artist: "Def Tech", Title: "Off The Edge feat.WISE"}
+		cache := &fakeCache{songEntries: map[Track]songCacheEntry{
+			track: {Available: true, CatalogSongID: "82077", LastChecked: time.Now()},
+		}}
+		svc := &Service{joysound: fakeCatalog{err: errors.New("should not be called")}, cache: cache, limiter: noopLimiter{}}
+
+		got, err := svc.CheckTrackAvailability(context.Background(), []Track{track})
+		if err != nil {
+			t.Fatalf("CheckTrackAvailability returned error: %v", err)
+		}
+
+		want := []TrackAvailabilityResult{
+			{Artist: "Def Tech", Title: "Off The Edge feat.WISE", Available: true, JoysoundURL: "https://www.joysound.com/web/search/song/82077"},
+		}
+		if !slices.Equal(got, want) {
+			t.Errorf("got %v, want %v", got, want)
+		}
+	})
+
+	t.Run("fresh song cache hit without a song ID falls back to the cached artist URL", func(t *testing.T) {
+		track := Track{Artist: "Architects", Title: "Animals"}
+		cache := &fakeCache{
+			songEntries: map[Track]songCacheEntry{
+				track: {Available: true, CatalogSongID: "", LastChecked: time.Now()},
+			},
+			entries: map[string]cacheEntry{
+				"Architects": {Available: true, CatalogArtistID: "1", LastChecked: time.Now()},
+			},
+		}
+		svc := &Service{joysound: fakeCatalog{err: errors.New("should not be called")}, cache: cache, limiter: noopLimiter{}}
+
+		got, err := svc.CheckTrackAvailability(context.Background(), []Track{track})
+		if err != nil {
+			t.Fatalf("CheckTrackAvailability returned error: %v", err)
+		}
+
+		want := []TrackAvailabilityResult{
+			{Artist: "Architects", Title: "Animals", Available: true, JoysoundURL: "https://www.joysound.com/web/search/artist/1"},
+		}
+		if !slices.Equal(got, want) {
+			t.Errorf("got %v, want %v", got, want)
+		}
+	})
+
+	t.Run("batches every track's cache lookups into a single round trip", func(t *testing.T) {
+		tracks := []Track{
+			{Artist: "Def Tech", Title: "Off The Edge feat.WISE"},
+			{Artist: "Architects", Title: "Animals"},
+		}
+		cache := &fakeCache{}
+		svc := &Service{
+			joysound: fakeCatalog{
+				songs:   map[string][]Song{"Off The Edge feat.WISE": {}, "Animals": {}},
+				artists: map[string][]Artist{"Def Tech": {}, "Architects": {}},
+			},
+			cache:   cache,
+			limiter: noopLimiter{},
+		}
+
+		if _, err := svc.CheckTrackAvailability(context.Background(), tracks); err != nil {
+			t.Fatalf("CheckTrackAvailability returned error: %v", err)
+		}
+
+		if cache.lookupSongBatchCalls != 1 {
+			t.Errorf("got %d lookupSongBatch calls, want exactly 1", cache.lookupSongBatchCalls)
+		}
+		if cache.lookupBatchCalls != 1 {
+			t.Errorf("got %d lookupBatch calls, want exactly 1", cache.lookupBatchCalls)
+		}
+	})
+
+	t.Run("propagates a search failure", func(t *testing.T) {
+		svc := &Service{joysound: fakeCatalog{err: errors.New("boom")}, cache: &fakeCache{}, limiter: noopLimiter{}}
+
+		if _, err := svc.CheckTrackAvailability(context.Background(), []Track{{Artist: "Architects", Title: "Animals"}}); err == nil {
+			t.Error("expected an error, got nil")
+		}
+	})
+
+	t.Run("stops once the live-search budget is exhausted", func(t *testing.T) {
+		tracks := make([]Track, maxLiveSearchesPerCheck)
+		for i := range tracks {
+			tracks[i] = Track{Artist: fmt.Sprintf("Artist %d", i), Title: fmt.Sprintf("Song %d", i)}
+		}
+
+		svc := &Service{joysound: fakeCatalog{}, cache: &fakeCache{}, limiter: noopLimiter{}}
+
+		got, err := svc.CheckTrackAvailability(context.Background(), tracks)
+		if err != nil {
+			t.Fatalf("CheckTrackAvailability returned error: %v", err)
+		}
+
+		// Each track with no song match and no artist match costs 2 live
+		// searches (song search + artist fallback), so only half the
+		// budget's worth of tracks can be fully resolved.
+		want := maxLiveSearchesPerCheck / 2
+		if len(got) != want {
+			t.Fatalf("got %d results, want %d — each unresolved track costs 2 live searches", len(got), want)
+		}
+		for i, result := range got {
+			if result.Artist != tracks[i].Artist || result.Title != tracks[i].Title {
+				t.Errorf("result %d: got %q/%q, want %q/%q — results should be an in-order prefix", i, result.Artist, result.Title, tracks[i].Artist, tracks[i].Title)
+			}
+		}
+	})
 }
 
 func TestCheckAvailability(t *testing.T) {
