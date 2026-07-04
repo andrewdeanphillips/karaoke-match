@@ -49,8 +49,9 @@ database bug) — is written up in
 
 - [x] **Project setup** — Go backend, React/TypeScript frontend, PostgreSQL, CORS wiring between them
 - [x] **Spotify playlist import** — OAuth Authorization Code flow, playlist parsing, unique-artist extraction
-- [x] **JOYSOUND integration** — search-results scraping and artist matching, including handling same-name collisions across catalogs
-- [x] **Playlist matching** — a single endpoint combining playlist import with per-artist availability checks
+- [x] **JOYSOUND integration** — search-results scraping with song- and artist-level matching, including handling same-name collisions across catalogs
+- [x] **Playlist matching** — a single endpoint combining playlist import with per-track availability checks
+- [x] **Song-level matching** — each track resolves an independent song link and artist link, with an artist-name fallback search when the song title search alone doesn't surface the artist
 - [x] **Availability cache** — Postgres-backed cache with TTL in front of JOYSOUND, plus a rate limiter and per-request lookup budget
 - [x] **Results dashboard** — loading states, error handling, summary statistics, results table
 - [x] **Per-visitor Spotify sessions** — each visitor reads their own playlists via their own persisted, auto-refreshed session (required by Spotify's early 2026 API restrictions), plus a no-login "try an example" path
@@ -71,15 +72,21 @@ User → React frontend → Go API ─┬─→ Spotify Web API   (playlist impo
    "Try an example" runs the same flow against a curated playlist via one
    owner-held session.)
 2. The visitor submits one of their playlist URLs; the backend extracts its
-   unique artists.
-3. Each artist is checked against the Postgres cache first (entries stay fresh
-   for 30 days). On a miss it searches JOYSOUND live — paced to ≥200ms between
-   requests and capped at 50 lookups per check, since JOYSOUND has no public
-   API and this means one page load per artist. Mostly-cached playlists return
-   near-instantly; a cold playlist past the 50-lookup cap returns a partial
-   result, and the UI reports how many artists were checked.
-4. Results — per-artist availability plus the checked count — return to the
-   frontend, with available artists linking to their JOYSOUND page.
+   tracks (artist + title).
+3. Each track is checked against the Postgres cache first (entries stay fresh
+   for 30 days). On a miss it searches JOYSOUND live by song title — one
+   combined search page returns both song and artist results, so it usually
+   resolves both links in a single lookup; a second search by artist name
+   only runs as a fallback when the artist doesn't surface on the title
+   search. This is paced to ≥200ms between requests and capped at 50 lookups
+   per check, since JOYSOUND has no public API and this means one page load
+   per search. Mostly-cached playlists return near-instantly; a cold playlist
+   past the 50-lookup cap returns a partial result, and the UI reports how
+   many tracks were checked.
+4. Results return to the frontend as a Song | Artist table — each track's
+   song title and artist name link independently to their JOYSOUND pages
+   when a match was found, so a song match and an artist match are both
+   visible even when only one of them exists for a track.
 
 ## Architecture
 
