@@ -13,14 +13,14 @@ import (
 )
 
 // matchResponse is the JSON body returned by the playlist match endpoint.
-// Results may be shorter than TotalArtists — CheckAvailability caps how many
-// live JOYSOUND searches a single check will make, so a playlist with many
-// uncached artists can end up only partially checked. TotalArtists lets
+// Results may be shorter than TotalTracks — CheckTrackAvailability caps how
+// many live JOYSOUND searches a single check will make, so a playlist with
+// many uncached tracks can end up only partially checked. TotalTracks lets
 // callers distinguish that from a complete check rather than mistaking a
 // short list for the full picture.
 type matchResponse struct {
-	Results      []karaoke.AvailabilityResult `json:"results"`
-	TotalArtists int                          `json:"totalArtists"`
+	Results     []karaoke.TrackAvailabilityResult `json:"results"`
+	TotalTracks int                               `json:"totalTracks"`
 }
 
 // matchHandler handles POST /playlist/match: it accepts a Spotify playlist
@@ -55,7 +55,7 @@ func (a *api) matchHandler(w http.ResponseWriter, r *http.Request) {
 // sequence, differing only in whose access token they hand it and how they
 // got hold of one.
 func (a *api) runMatch(ctx context.Context, w http.ResponseWriter, playlistURL, accessToken string) {
-	artists, err := a.playlist.Import(ctx, playlistURL, accessToken)
+	tracks, err := a.playlist.Import(ctx, playlistURL, accessToken)
 	if err != nil {
 		if errors.Is(err, playlist.ErrInvalidPlaylistURL) {
 			http.Error(w, err.Error(), http.StatusBadRequest)
@@ -66,13 +66,18 @@ func (a *api) runMatch(ctx context.Context, w http.ResponseWriter, playlistURL, 
 		return
 	}
 
-	results, err := a.karaoke.CheckAvailability(ctx, artists)
+	karaokeTracks := make([]karaoke.Track, len(tracks))
+	for i, track := range tracks {
+		karaokeTracks[i] = karaoke.Track{Artist: track.Artists[0], Title: track.Name}
+	}
+
+	results, err := a.karaoke.CheckTrackAvailability(ctx, karaokeTracks)
 	if err != nil {
 		log.Printf("playlist match: checking availability: %v", err)
-		http.Error(w, "failed to check artist availability", http.StatusInternalServerError)
+		http.Error(w, "failed to check song availability", http.StatusInternalServerError)
 		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(matchResponse{Results: results, TotalArtists: len(artists)})
+	json.NewEncoder(w).Encode(matchResponse{Results: results, TotalTracks: len(tracks)})
 }

@@ -44,7 +44,7 @@ function MatchPage() {
     <main className="page">
       <h1>KaraokeMatch</h1>
       <p className="intro">
-        Paste one of your Spotify playlist URLs to see which of its artists
+        Paste one of your Spotify playlist URLs to see which of its songs
         are available on JOYSOUND.
       </p>
       <PlaylistForm onSubmit={handleSubmit} disabled={loading} />

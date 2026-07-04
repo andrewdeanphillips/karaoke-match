@@ -1,10 +1,11 @@
-export type AvailabilityResult = {
+export type TrackAvailabilityResult = {
   artist: string;
-  available: boolean;
-  joysoundUrl?: string;
+  title: string;
+  artistJoysoundUrl?: string;
+  songJoysoundUrl?: string;
 };
 
 export type MatchResult = {
-  results: AvailabilityResult[];
-  totalArtists: number;
+  results: TrackAvailabilityResult[];
+  totalTracks: number;
 };

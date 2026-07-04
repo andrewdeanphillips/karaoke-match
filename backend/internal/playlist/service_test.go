@@ -65,11 +65,11 @@ func TestParsePlaylistID(t *testing.T) {
 	}
 }
 
-func TestUniqueArtists(t *testing.T) {
+func TestUniqueTracks(t *testing.T) {
 	tests := []struct {
 		name   string
 		tracks []spotify.Track
-		want   []string
+		want   []spotify.Track
 	}{
 		{
 			name:   "no tracks",
@@ -77,13 +77,27 @@ func TestUniqueArtists(t *testing.T) {
 			want:   nil,
 		},
 		{
-			name: "deduplicates repeated artists, preserving first-seen order",
+			name: "deduplicates repeated tracks, preserving first-seen order",
 			tracks: []spotify.Track{
 				{Name: "Track A", Artists: []string{"Artist X", "Artist Y"}},
 				{Name: "Track B", Artists: []string{"Artist Y", "Artist Z"}},
-				{Name: "Track C", Artists: []string{"Artist X"}},
+				{Name: "Track A", Artists: []string{"Artist X", "Artist Y"}},
 			},
-			want: []string{"Artist X", "Artist Y", "Artist Z"},
+			want: []spotify.Track{
+				{Name: "Track A", Artists: []string{"Artist X", "Artist Y"}},
+				{Name: "Track B", Artists: []string{"Artist Y", "Artist Z"}},
+			},
+		},
+		{
+			name: "same title credited to a different primary artist is not a duplicate",
+			tracks: []spotify.Track{
+				{Name: "Track A", Artists: []string{"Artist X"}},
+				{Name: "Track A", Artists: []string{"Artist Y"}},
+			},
+			want: []spotify.Track{
+				{Name: "Track A", Artists: []string{"Artist X"}},
+				{Name: "Track A", Artists: []string{"Artist Y"}},
+			},
 		},
 		{
 			name: "tracks with no artists contribute nothing",
@@ -96,8 +110,11 @@ func TestUniqueArtists(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := uniqueArtists(tt.tracks)
-			if !slices.Equal(got, tt.want) {
+			got := uniqueTracks(tt.tracks)
+			equal := slices.EqualFunc(got, tt.want, func(a, b spotify.Track) bool {
+				return a.Name == b.Name && slices.Equal(a.Artists, b.Artists)
+			})
+			if !equal {
 				t.Errorf("got %v, want %v", got, tt.want)
 			}
 		})

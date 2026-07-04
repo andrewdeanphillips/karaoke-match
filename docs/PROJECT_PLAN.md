@@ -340,7 +340,12 @@ No microservices initially.
 
 # Future Enhancements
 
-## Phase 2: Song-Level Matching
+## Phase 2: Song-Level Matching ✓ (shipped post-MVP)
+
+Shipped after the MVP: each track resolves an independent song link and
+artist link from JOYSOUND, with an artist-name fallback search when the
+song title search alone doesn't surface the artist. See `ARCHITECTURE.md`
+("Future Evolution → Phase 2") and the README for what shipped.
 
 Move beyond artist availability.
 

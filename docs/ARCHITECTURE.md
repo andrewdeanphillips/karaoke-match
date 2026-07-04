@@ -140,7 +140,7 @@ Responsible for:
 
 Responsible for:
 
-* JOYSOUND integration (scraping, artist matching)
+* JOYSOUND integration (scraping, song- and artist-level matching with fallback)
 * Availability lookup and result aggregation
 * Caching strategy
 
@@ -213,12 +213,16 @@ Delivered: playlist matching, JOYSOUND availability checks, Postgres-backed
 availability cache, per-visitor Spotify sessions, no-login demo path, Cloud
 Run deployment.
 
-### Phase 2
+### Phase 2 — song-level matching ✓ shipped (post-MVP)
 
-Add:
+Each track resolves an independent song link and artist link from one
+combined JOYSOUND search (by song title), with a second search by artist
+name as a fallback when the artist doesn't surface on the title search.
+Backed by a dedicated song-availability cache table alongside the existing
+artist one.
 
-* Song-level matching (currently artist-level only)
-* Additional karaoke catalog sources alongside JOYSOUND
+Remaining from the original Phase 2 idea: additional karaoke catalog sources
+alongside JOYSOUND.
 
 ### Phase 3
 

@@ -1,74 +1,73 @@
 import { useState } from "react";
-import type { AvailabilityResult } from "../types/match";
+import type { TrackAvailabilityResult } from "../types/match";
 
 type ResultsListProps = {
-  results: AvailabilityResult[];
+  results: TrackAvailabilityResult[];
 };
 
-// ResultsList splits matched artists into "available" and "not found" groups
-// — the grouping itself is the headline information, and it keeps a long
-// playlist scannable in a way a flat available/unavailable column never was.
-// The search box narrows both groups at once, which matters most for exactly
-// the playlists where scanning by eye stops being practical.
+// Each row shows the song title and artist name, linked to their JOYSOUND
+// pages when available — there's no separate "match type" indicator, the
+// presence of a link on the title or the artist name says it all. Rows with
+// at least one link sort first, so the songs worth singing surface above the
+// ones JOYSOUND doesn't have at all.
 function ResultsList({ results }: ResultsListProps) {
   const [query, setQuery] = useState("");
 
   const needle = query.trim().toLowerCase();
   const matching = needle
-    ? results.filter((result) => result.artist.toLowerCase().includes(needle))
+    ? results.filter(
+        (result) =>
+          result.title.toLowerCase().includes(needle) ||
+          result.artist.toLowerCase().includes(needle),
+      )
     : results;
 
-  const available = matching.filter((result) => result.available);
-  const notFound = matching.filter((result) => !result.available);
+  const sorted = [...matching].sort((a, b) => matchRank(a) - matchRank(b));
 
   return (
     <div className="results">
       <input
         type="search"
         className="results-search"
-        placeholder="Search artists…"
+        placeholder="Search songs or artists…"
         value={query}
         onChange={(event) => setQuery(event.target.value)}
-        aria-label="Search artists"
+        aria-label="Search songs or artists"
       />
-      <div className="results-columns">
-        <ResultsColumn label="Available" artists={available} variant="available" />
-        <ResultsColumn label="Not found" artists={notFound} variant="not-found" />
-      </div>
-    </div>
-  );
-}
-
-type ResultsColumnProps = {
-  label: string;
-  artists: AvailabilityResult[];
-  variant: "available" | "not-found";
-};
-
-function ResultsColumn({ label, artists, variant }: ResultsColumnProps) {
-  return (
-    <div className={`results-column results-column--${variant}`}>
-      <h3 className="results-column-heading">
-        {label} <span className="count">{artists.length}</span>
-      </h3>
-      {artists.length > 0 ? (
-        <ul>
-          {artists.map((result) => (
-            <li key={result.artist}>
-              {result.joysoundUrl ? (
-                <a href={result.joysoundUrl} target="_blank" rel="noopener noreferrer">
-                  {result.artist}
-                </a>
-              ) : (
-                result.artist
-              )}
-            </li>
-          ))}
-        </ul>
+      {sorted.length > 0 ? (
+        <table className="results-table">
+          <thead>
+            <tr>
+              <th>Song</th>
+              <th>Artist</th>
+            </tr>
+          </thead>
+          <tbody>
+            {sorted.map((result) => (
+              <tr key={`${result.artist}::${result.title}`}>
+                <td>{linkOrText(result.title, result.songJoysoundUrl)}</td>
+                <td>{linkOrText(result.artist, result.artistJoysoundUrl)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       ) : (
         <p className="results-empty">No matches</p>
       )}
     </div>
+  );
+}
+
+function matchRank(result: TrackAvailabilityResult): number {
+  return result.songJoysoundUrl || result.artistJoysoundUrl ? 0 : 1;
+}
+
+function linkOrText(text: string, url?: string) {
+  if (!url) return text;
+  return (
+    <a href={url} target="_blank" rel="noopener noreferrer">
+      {text}
+    </a>
   );
 }
 
